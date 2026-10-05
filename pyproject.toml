@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "ai-product-lab"
 version = "0.1.0"
@@ -11,6 +15,9 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.3,<9", "httpx>=0.27,<1", "ruff>=0.7,<1"]
+
+[tool.setuptools.packages.find]
+include = ["app*", "evals*"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
