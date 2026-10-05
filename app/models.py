@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -38,3 +40,19 @@ class ResolutionResult(BaseModel):
     confidence: float = Field(ge=0, le=1)
     candidate: MatchCandidate | None = None
     needs_review: bool = False
+
+
+class IngestionItemResult(BaseModel):
+    source: str
+    external_id: str | None
+    status: Literal["created", "updated", "unchanged", "rejected"]
+    reason: str | None = None
+
+
+class BatchIngestionResult(BaseModel):
+    total: int
+    created: int
+    updated: int
+    unchanged: int
+    rejected: int
+    items: list[IngestionItemResult]
