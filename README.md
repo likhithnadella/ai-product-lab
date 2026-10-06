@@ -12,7 +12,7 @@ This repo is intentionally not a collection of AI demos. It is designed to exerc
 
 The first vertical slice is live in the repository:
 
-- FastAPI service with `/health` and `/v1/resolve`
+- FastAPI service with `/health`, `/v1/resolve`, and `/v1/ingest`
 - Canonical `IntakeRecord` independent of source system
 - Email and phone normalization
 - Explainable deterministic + fuzzy entity matching
@@ -25,7 +25,7 @@ The first vertical slice is live in the repository:
 
 Two design decisions are deliberate. **Entity cleansing is not automatically an LLM problem**: deterministic signals create a cheap, explainable baseline that later AI components must beat. **Retries must be safe**: ingestion requires a stable source identity instead of guessing whether two anonymous records are the same person. Entity resolution and ingestion idempotency solve different problems and stay separate.
 
-The current record store is intentionally in-memory. It defines and tests ingestion semantics before adding Postgres, migrations, and transaction behavior. The store boundary can later be replaced by a persistent repository without changing the batch contract.
+The current record store is intentionally in-memory. The `/v1/ingest` API now exposes the tested batch contract while keeping persistence behind the store boundary. This defines HTTP, validation, replay, and update semantics before adding Postgres, migrations, and transaction behavior; the store can later be replaced without changing the API contract.
 
 ## Run locally
 
@@ -77,4 +77,4 @@ Python/FastAPI, data modeling and pipelines, search/query rewriting, embeddings 
 
 ## Status
 
-**Phase 1: Trustworthy data foundation — in progress.** Entity-resolution measurement and replay-safe batch ingestion now exist. Next: expose ingestion through an API boundary and introduce persistent storage only after the contract and failure semantics are stable.
+**Phase 1: Trustworthy data foundation — in progress.** Entity-resolution measurement and replay-safe batch ingestion are exposed through a tested API boundary. Next: introduce persistent storage with explicit transaction/concurrency semantics, then measure a lexical-search baseline before adding semantic retrieval.
