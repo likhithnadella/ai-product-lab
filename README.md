@@ -1,33 +1,117 @@
 # AI Product Lab
 
-A production-minded **Data Operations Copilot** built end to end as a long-running learning and portfolio project.
+A production-minded enterprise AI system built in public increments: start with messy data, make it trustworthy, make it searchable, and only then give an AI permission to reason or act on it.
 
-The product starts with a real enterprise problem: teams receive messy customer/lead data from CSVs, email, CRMs, and other sources. Before adding an LLM, the system creates a trustworthy data layer: normalize records, resolve identities, expose uncertainty, and route ambiguous cases for review. Search, RAG, agents, evals, observability, security, and scaling are then added against a measurable baseline.
+## The problem
 
-## Why this project
+Enterprise AI demos usually begin at the exciting part: connect a model to some documents, add a chat box, and call it RAG.
 
-This repo is intentionally not a collection of AI demos. It is designed to exercise the judgment expected from AI product engineers, forward-deployed engineers, and technical founders: identify the actual bottleneck, choose the simplest useful architecture, measure it, ship it, and evolve it under real constraints.
+Real systems inherit a harder problem. The same customer can arrive from a CRM, a CSV import, an email workflow, and an internal API. Fields are incomplete, identifiers disagree, retries happen, and two records that look similar are not necessarily the same person. If that layer is unreliable, a better model only produces more convincing answers from bad context.
 
-## V0.1 — trustworthy data foundation
+This project starts there.
 
-The first vertical slice is live in the repository:
+The long-term product is a trusted context and operations layer between enterprise systems and AI workflows. It should be able to ingest records from multiple sources, reconcile identity without hiding uncertainty, retrieve the right authorized context, and eventually let models use tools without bypassing the controls expected of production software.
 
-- FastAPI service with `/health`, `/v1/resolve`, and `/v1/ingest`
-- Canonical `IntakeRecord` independent of source system
-- Email and phone normalization
-- Explainable deterministic + fuzzy entity matching
-- Confidence-based `matched`, `review`, and `new_record` decisions
-- Entity-resolution evaluation harness for precision, recall, and review rate
-- Idempotent batch ingestion using `(source, external_id)` as the stable source identity
-- Per-item ingestion outcomes: `created`, `updated`, `unchanged`, or `rejected`
-- Tests for matching quality, replay safety, updates, source isolation, and invalid records
-- GitHub Actions CI with Ruff + pytest
+The interesting question is not “how much AI can fit into the architecture?” It is **where does AI earn its place?**
 
-Two design decisions are deliberate. **Entity cleansing is not automatically an LLM problem**: deterministic signals create a cheap, explainable baseline that later AI components must beat. **Retries must be safe**: ingestion requires a stable source identity instead of guessing whether two anonymous records are the same person. Entity resolution and ingestion idempotency solve different problems and stay separate.
+## The story so far
 
-The current record store is intentionally in-memory. The `/v1/ingest` API now exposes the tested batch contract while keeping persistence behind the store boundary. This defines HTTP, validation, replay, and update semantics before adding Postgres, migrations, and transaction behavior; the store can later be replaced without changing the API contract.
+### Chapter 1 — establish trust before intelligence
 
-## Run locally
+The first slice defines a source-independent `IntakeRecord`, normalizes email and phone data, and resolves a new record against known candidates.
+
+Matching is intentionally explainable. Strong identifiers carry more weight than fuzzy name similarity, and the resolver does not force every input into a match. It can return `matched`, `review`, or `new_record` with the evidence behind the score.
+
+That gives the project something important before adding an LLM: a measurable baseline.
+
+The entity-resolution eval harness tracks precision, recall, and review rate so a future semantic or model-assisted approach has to demonstrate that it is actually better—not merely newer.
+
+### Chapter 2 — make retries boring
+
+The next problem appears as soon as data starts moving between systems: delivery is not exactly once.
+
+A CRM sync can retry. A batch can be replayed. The same external identifier can exist in two source systems. Treating all of those cases as entity-resolution problems would mix two different questions:
+
+- **Ingestion identity:** have we already processed this source record?
+- **Entity identity:** do two different source records represent the same real-world entity?
+
+The ingestion layer therefore uses `(source, external_id)` as its stable key and reports each item as `created`, `updated`, `unchanged`, or `rejected`. Tests cover replay safety, updates, source isolation, invalid input, and mixed batches.
+
+The store is still in memory on purpose. The ingestion contract is now exposed through `/v1/ingest`, so HTTP validation, replay behavior, and update semantics can be exercised without coupling them to a database choice. Postgres, migrations, and transaction boundaries come next, after the behavior is understood.
+
+## What exists today
+
+```text
+External systems
+      |
+      v
+  Ingestion ---------> replay / validation semantics
+      |
+      v
+Canonical records
+      |
+      v
+Entity resolution ---> confidence + evidence ---> human review when uncertain
+      |
+      v
+Trusted entities
+      |
+      +----> search / retrieval          (next)
+      +----> grounded AI context         (later)
+      +----> controlled tools / actions  (later)
+
+Cross-cutting as the system grows:
+evals | authorization | observability | reliability | latency | cost
+```
+
+The repository currently contains:
+
+- a FastAPI service with `/health`, `/v1/resolve`, and `/v1/ingest`
+- Pydantic contracts for canonical records and resolution responses
+- email and phone normalization
+- deterministic + fuzzy entity matching with explainable evidence
+- confidence-based human-review routing
+- replay-safe batch-ingestion logic
+- entity-resolution evals
+- pytest coverage for matching and ingestion behavior
+- Ruff + pytest in GitHub Actions
+
+See [the roadmap](docs/ROADMAP.md) for how this grows from a small trustworthy core into a production-style AI system.
+
+## Why the architecture is deliberately small
+
+This repo is meant to demonstrate engineering judgment, not the number of infrastructure logos that can fit in a diagram.
+
+There is no Kafka yet because there is no measured throughput problem that requires Kafka. There is no dedicated vector database because retrieval has not yet established a lexical baseline. There is no agent because the product does not yet have a workflow where autonomy beats deterministic software.
+
+Complexity has to earn its way into the system.
+
+As the project grows, changes should be backed by evidence: retrieval quality, p95/p99 latency, error rate, throughput, review rate, cost per request, or a concrete reliability/security requirement. The eventual scale exercises will deliberately create bottlenecks, measure them, change the architecture, and measure again.
+
+## Where this is going
+
+The build proceeds roughly in this order:
+
+**trustworthy data → persistence → search baseline → hybrid retrieval/RAG → grounded model integration → eval gates → controlled tools/MCP → product UI → security/observability → deployment → load and failure testing**
+
+That sequence is intentional. Each layer should create a baseline that the next layer has to beat.
+
+At maturity, the repo should be able to answer engineering questions with evidence:
+
+- How do we prevent stale or unauthorized context from reaching a model?
+- When does semantic retrieval outperform lexical search, and at what cost?
+- What happens when an upstream source replays two million events?
+- How do prompt/model changes pass regression evaluation before release?
+- What happens when the model provider is slow or unavailable?
+- Where does the system bottleneck at 10x load?
+- Which actions require human approval, and how is that enforced?
+- What does one useful AI request cost?
+
+The goal is not to claim “enterprise scale” because an architecture diagram says so. The goal is to produce measurements and failure history that make the claim defensible.
+
+## Run it locally
+
+Python 3.11+ is required.
 
 ```bash
 python -m venv .venv
@@ -36,45 +120,46 @@ pip install -e ".[dev]"
 uvicorn app.main:app --reload
 ```
 
-Then open the generated API docs at `http://127.0.0.1:8000/docs`.
+The generated API documentation is available at `http://127.0.0.1:8000/docs`.
 
-Run quality checks:
+Run the same basic quality gates used by CI:
 
 ```bash
 ruff check .
 pytest -q
 ```
 
-## Architecture direction
+## Repository map
 
 ```text
-Sources (CSV / Email / APIs)
-          |
-          v
-   Ingestion adapters
-          |
-          v
-Normalize -> Entity Resolution -> Review Queue
-          |                    |
-          +------> Store <-----+
-                     |
-             Search / Retrieval
-              |             |
-        lexical/hybrid    vector/RAG
-              \             /
-               AI assistance
-                     |
-              Product workflow
+app/
+  main.py          API boundary
+  models.py        canonical request/response contracts
+  ingestion.py     replay-safe ingestion semantics
+  resolution.py    normalization and entity matching
 
-Cross-cutting: evals | auth | observability | cost | reliability
+evals/
+  entity_resolution.py   measurable matching baseline
+
+tests/             behavioral and evaluation tests
+docs/ROADMAP.md    product and engineering roadmap
+.github/           CI
 ```
 
-See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the staged build plan.
+## Engineering principles
 
-## Learning targets
+1. Start with the user/data failure, not a preferred technology.
+2. Prefer deterministic software when the problem is deterministic.
+3. Measure a baseline before claiming an AI improvement.
+4. Expose uncertainty instead of manufacturing confidence.
+5. Keep ingestion identity separate from real-world entity identity.
+6. Every AI feature eventually needs an eval, fallback, and latency/cost budget.
+7. Authorization belongs in the retrieval and tool path, not in a prompt.
+8. Add infrastructure when a measured constraint justifies it.
+9. Document not only what changed, but why the previous design stopped being enough.
 
-Python/FastAPI, data modeling and pipelines, search/query rewriting, embeddings and RAG, LLM integration and structured outputs, evals, agent/tool design, frontend product work, Postgres, queues/caching, CI/CD, security, observability, reliability, cost/latency optimization, and scaling/system design.
+## Current status
 
-## Status
+**Phase 1 — trustworthy data foundation.**
 
-**Phase 1: Trustworthy data foundation — in progress.** Entity-resolution measurement and replay-safe batch ingestion are exposed through a tested API boundary. Next: introduce persistent storage with explicit transaction/concurrency semantics, then measure a lexical-search baseline before adding semantic retrieval.
+Entity resolution and replay-safe ingestion are implemented and exposed through the API. The next useful boundary is durable persistence with explicit uniqueness, transaction, and concurrent-upsert semantics—without changing the behavior already covered by tests.
