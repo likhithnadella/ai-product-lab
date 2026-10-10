@@ -1,3 +1,5 @@
+import pytest
+
 from app.models import IntakeRecord
 from app.search import search_records
 from evals.retrieval import RetrievalCase, evaluate_retrieval
@@ -51,8 +53,6 @@ def test_empty_query_and_missing_identity_are_not_returned() -> None:
 
 
 def test_invalid_limits_are_rejected() -> None:
-    import pytest
-
     with pytest.raises(ValueError):
         search_records([], "x", allowed_sources=frozenset({"crm"}), limit=0)
     with pytest.raises(ValueError):
@@ -86,3 +86,41 @@ def test_no_cases_returns_defined_zero_metrics() -> None:
         "mrr_at_k": 0.0,
         "zero_result_rate": 0.0,
     }
+
+
+def test_mutable_source_scope_is_rejected() -> None:
+    with pytest.raises(TypeError):
+        search_records([], "asha", allowed_sources={"crm"})  # type: ignore[arg-type]
+
+
+def test_relevance_labels_cannot_reference_unauthorized_sources() -> None:
+    case = RetrievalCase("asha", frozenset({("private", "1")}), frozenset({"public"}))
+    with pytest.raises(ValueError, match="allowed source scope"):
+        evaluate_retrieval([], [case])
+
+
+def test_source_scoped_search_is_stable_under_input_reordering() -> None:
+    rows = [record("b", "2", first_name="Asha"), record("a", "1", first_name="Asha")]
+    scope = frozenset({"a", "b"})
+    first = search_records(rows, "asha", allowed_sources=scope)
+    second = search_records(list(reversed(rows)), "asha", allowed_sources=scope)
+    assert [(h.record.source, h.record.external_id) for h in first] == [
+        (h.record.source, h.record.external_id) for h in second
+    ]
+
+
+def test_search_rejects_limit_above_maximum() -> None:
+    with pytest.raises(ValueError):
+        search_records([], "asha", allowed_sources=frozenset({"crm"}), limit=101)
+
+
+def test_unjudged_query_does_not_reduce_recall() -> None:
+    rows = [record("crm", "1", first_name="Asha")]
+    cases = [
+        RetrievalCase("asha", frozenset({("crm", "1")}), frozenset({"crm"})),
+        RetrievalCase("unseen", frozenset(), frozenset({"crm"})),
+    ]
+    metrics = evaluate_retrieval(rows, cases)
+    assert metrics["judged_cases"] == 1
+    assert metrics["recall_at_k"] == 1.0
+    assert metrics["zero_result_rate"] == 0.5
