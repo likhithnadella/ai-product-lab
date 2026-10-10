@@ -1,38 +1,64 @@
 from collections.abc import Iterable
+from threading import Lock
+from typing import Literal
 
 from app.models import BatchIngestionResult, IngestionItemResult, IntakeRecord
 
+UpsertStatus = Literal["created", "updated", "unchanged"]
+
 
 class InMemoryRecordStore:
-    """Small repository implementation used until persistent storage lands.
+    """Process-local store with an atomic upsert boundary.
 
-    Keeping ingestion behind this interface makes the idempotency semantics testable
-    now without prematurely choosing database infrastructure.
+    The lock protects concurrent requests handled by threads in one process.
+    It does not provide durability or coordination across worker processes.
+    A database implementation must enforce the same source identity with a
+    unique constraint and a transaction, not a read-then-write pair.
     """
 
     def __init__(self) -> None:
         self._records: dict[tuple[str, str], IntakeRecord] = {}
+        self._lock = Lock()
 
     def get(self, source: str, external_id: str) -> IntakeRecord | None:
-        return self._records.get((source, external_id))
+        with self._lock:
+            return self._records.get((source, external_id))
 
     def put(self, record: IntakeRecord) -> None:
-        if record.external_id is None:
+        if not record.external_id:
             raise ValueError("external_id is required for persisted ingestion records")
-        self._records[(record.source, record.external_id)] = record
+        with self._lock:
+            self._records[(record.source, record.external_id)] = record
+
+    def upsert(self, record: IntakeRecord) -> UpsertStatus:
+        """Classify and apply one source record under the same lock."""
+        if not record.external_id:
+            raise ValueError("external_id is required for persisted ingestion records")
+
+        key = (record.source, record.external_id)
+        with self._lock:
+            existing = self._records.get(key)
+            if existing is None:
+                self._records[key] = record
+                return "created"
+            if existing == record:
+                return "unchanged"
+            self._records[key] = record
+            return "updated"
 
     def all(self) -> list[IntakeRecord]:
-        return list(self._records.values())
+        with self._lock:
+            return list(self._records.values())
 
 
 def ingest_batch(
     records: Iterable[IntakeRecord], store: InMemoryRecordStore
 ) -> BatchIngestionResult:
-    """Upsert a batch using (source, external_id) as the idempotency key.
+    """Upsert source records with replay-safe, per-item outcomes.
 
-    Replaying an identical source record is a no-op. A later payload for the same
-    source identity is an update. Records without a stable source identity are
-    rejected rather than guessed at, preventing duplicate creation on retries.
+    The store owns the atomic classification/write operation. This avoids a
+    race where two requests both read 'missing' and both report 'created'.
+    Batches are not all-or-nothing transactions; each item is independent.
     """
     items: list[IngestionItemResult] = []
 
@@ -48,16 +74,7 @@ def ingest_batch(
             )
             continue
 
-        existing = store.get(record.source, record.external_id)
-        if existing is None:
-            store.put(record)
-            status = "created"
-        elif existing == record:
-            status = "unchanged"
-        else:
-            store.put(record)
-            status = "updated"
-
+        status = store.upsert(record)
         items.append(
             IngestionItemResult(
                 source=record.source,
