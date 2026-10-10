@@ -28,6 +28,8 @@ def evaluate_retrieval(
     recall_sum = reciprocal_rank_sum = 0.0
     judged = zero_results = 0
     for case in cases:
+        if any(source not in case.allowed_sources for source, _ in case.relevant_keys):
+            raise ValueError("relevance judgments must respect the allowed source scope")
         hits = search_records(records, case.query, allowed_sources=case.allowed_sources, limit=k)
         found = [(hit.record.source, hit.record.external_id) for hit in hits]
         if not found:
