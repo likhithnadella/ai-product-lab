@@ -73,6 +73,7 @@ def test_retrieval_metrics_and_unjudged_cases() -> None:
     assert result["cases"] == 3
     assert result["judged_cases"] == 2
     assert result["recall_at_k"] == 0.5
+    assert result["precision_at_k"] == 0.5
     assert result["mrr_at_k"] == 0.5
     assert result["zero_result_rate"] == 2 / 3
 
@@ -83,6 +84,7 @@ def test_no_cases_returns_defined_zero_metrics() -> None:
         "cases": 0,
         "judged_cases": 0,
         "recall_at_k": 0.0,
+        "precision_at_k": 0.0,
         "mrr_at_k": 0.0,
         "zero_result_rate": 0.0,
     }
