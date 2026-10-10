@@ -37,10 +37,8 @@ def test_exact_field_boost_breaks_lexical_tie() -> None:
         "Asha",
         allowed_sources=SCOPE,
     )
-    assert [h.record.external_id for h in hits] == ["a", "b"] or [
-        h.record.external_id for h in hits
-    ] == ["b", "a"]
-    assert hits[0].score >= hits[1].score
+    assert [h.record.external_id for h in hits] == ["a", "b"]
+    assert hits[0].score > hits[1].score
 
 
 def test_match_explanation_names_matched_fields() -> None:
