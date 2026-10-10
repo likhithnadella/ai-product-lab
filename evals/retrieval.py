@@ -25,7 +25,7 @@ def evaluate_retrieval(
     if not 1 <= k <= 100:
         raise ValueError("k must be between 1 and 100")
 
-    recall_sum = reciprocal_rank_sum = 0.0
+    recall_sum = reciprocal_rank_sum = precision_sum = 0.0
     judged = zero_results = 0
     for case in cases:
         if any(source not in case.allowed_sources for source, _ in case.relevant_keys):
@@ -38,7 +38,9 @@ def evaluate_retrieval(
             continue
 
         judged += 1
-        recall_sum += len(case.relevant_keys.intersection(found)) / len(case.relevant_keys)
+        relevant_found = len(case.relevant_keys.intersection(found))
+        recall_sum += relevant_found / len(case.relevant_keys)
+        precision_sum += relevant_found / k
         for rank, key in enumerate(found, start=1):
             if key in case.relevant_keys:
                 reciprocal_rank_sum += 1 / rank
@@ -48,6 +50,7 @@ def evaluate_retrieval(
         "cases": len(cases),
         "judged_cases": judged,
         "recall_at_k": recall_sum / judged if judged else 0.0,
+        "precision_at_k": precision_sum / judged if judged else 0.0,
         "mrr_at_k": reciprocal_rank_sum / judged if judged else 0.0,
         "zero_result_rate": zero_results / len(cases) if cases else 0.0,
     }
