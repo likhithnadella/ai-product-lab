@@ -35,6 +35,9 @@ def search_records(
     if not 1 <= limit <= 100:
         raise ValueError("limit must be between 1 and 100")
 
+    if not isinstance(allowed_sources, frozenset):
+        raise TypeError("allowed_sources must be a frozenset from trusted authorization")
+
     query_terms = _terms(query)
     if not query_terms or not allowed_sources:
         return []
