@@ -1,8 +1,8 @@
 """Deterministic lexical retrieval over a caller-authorized record collection."""
 
+import re
 from collections.abc import Iterable
 from dataclasses import dataclass
-import re
 
 from app.models import IntakeRecord
 
