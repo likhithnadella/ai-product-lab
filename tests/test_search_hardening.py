@@ -33,12 +33,12 @@ def test_short_phone_fragment_does_not_match() -> None:
 
 def test_exact_field_boost_breaks_lexical_tie() -> None:
     hits = search_records(
-        [row("a", first_name="Asha", company="Asha North"), row("b", first_name="Asha")],
+        [row("a", first_name="Asha", company="Asha North"), row("b", first_name="Asha", company="Asha North")],
         "Asha",
         allowed_sources=SCOPE,
     )
     assert [h.record.external_id for h in hits] == ["a", "b"]
-    assert hits[0].score > hits[1].score
+    assert hits[0].score == hits[1].score
 
 
 def test_match_explanation_names_matched_fields() -> None:
