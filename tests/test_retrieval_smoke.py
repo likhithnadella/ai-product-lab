@@ -7,4 +7,5 @@ def test_synthetic_smoke_report() -> None:
     assert report["judged_cases"] == 2
     assert report["recall_at_k"] == 1.0
     assert report["mrr_at_k"] == 1.0
+    assert report["precision_at_k"] == 0.5
     assert report["zero_result_rate"] == 1 / 3
