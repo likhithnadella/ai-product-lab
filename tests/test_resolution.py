@@ -48,3 +48,45 @@ def test_low_signal_becomes_new_record():
 
     result = resolve(incoming, [candidate])
     assert result.decision == "new_record"
+
+
+def test_equal_strong_candidates_require_review():
+    incoming = IntakeRecord(source="csv", email="same@example.com", phone="2145550100")
+    candidates = [
+        IntakeRecord(source="crm", external_id=key, email="same@example.com", phone="2145550100")
+        for key in ("a", "b")
+    ]
+    result = resolve(incoming, candidates)
+    assert result.decision == "review"
+    assert result.needs_review is True
+
+
+def test_near_tie_requires_review():
+    incoming = IntakeRecord(
+        source="csv", email="same@example.com", phone="2145550100", company="Acme"
+    )
+    candidates = [
+        IntakeRecord(source="crm", external_id="a", email="same@example.com", phone="2145550100", company="Acme"),
+        IntakeRecord(source="crm", external_id="b", email="same@example.com", phone="2145550100"),
+    ]
+    result = resolve(incoming, candidates)
+    assert result.decision == "review"
+    assert result.needs_review is True
+
+
+def test_clear_winner_still_auto_matches():
+    incoming = IntakeRecord(source="csv", email="same@example.com", phone="2145550100")
+    candidates = [
+        IntakeRecord(source="crm", external_id="a", email="same@example.com", phone="2145550100"),
+        IntakeRecord(source="crm", external_id="b", email="other@example.com", phone="9999999999"),
+    ]
+    result = resolve(incoming, candidates)
+    assert result.decision == "matched"
+    assert result.candidate.record_id == "a"
+
+
+def test_duplicate_source_identity_does_not_create_false_ambiguity():
+    incoming = IntakeRecord(source="csv", email="same@example.com", phone="2145550100")
+    candidate = IntakeRecord(source="crm", external_id="a", email="same@example.com", phone="2145550100")
+    result = resolve(incoming, [candidate, candidate])
+    assert result.decision == "matched"
