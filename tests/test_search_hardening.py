@@ -31,7 +31,7 @@ def test_short_phone_fragment_does_not_match() -> None:
     assert search_records([row("1", phone="2145551212")], "1212", allowed_sources=SCOPE) == []
 
 
-def test_exact_field_boost_breaks_lexical_tie() -> None:
+def test_identical_lexical_matches_use_stable_identity_tie_break() -> None:
     hits = search_records(
         [row("a", first_name="Asha", company="Asha North"), row("b", first_name="Asha", company="Asha North")],
         "Asha",
@@ -97,3 +97,28 @@ def test_disallowed_source_cannot_appear_in_results() -> None:
     records = [row("1", first_name="Asha"), IntakeRecord(source="secret", external_id="2", first_name="Asha")]
     hits = search_records(records, "asha", allowed_sources=SCOPE)
     assert [h.record.source for h in hits] == ["crm"]
+
+
+def test_exact_field_boost_outweighs_token_only_match() -> None:
+    hits = search_records(
+        [row("a", company="Asha North"), row("b", company="Asha")],
+        "Asha",
+        allowed_sources=SCOPE,
+    )
+    assert [hit.record.external_id for hit in hits] == ["b", "a"]
+    assert hits[0].score > hits[1].score
+
+
+def test_mixed_text_and_phone_digits_cannot_bypass_lexical_terms() -> None:
+    records = [row("1", first_name="Ravi", phone="2145551212")]
+    assert search_records(records, "asha5551212", allowed_sources=SCOPE) == []
+    assert search_records(records, "asha 5551212", allowed_sources=SCOPE) == []
+
+
+def test_formatted_phone_number_is_still_searchable() -> None:
+    hits = search_records(
+        [row("1", phone="2145551212")],
+        "(214) 555-1212",
+        allowed_sources=SCOPE,
+    )
+    assert [hit.record.external_id for hit in hits] == ["1"]
