@@ -1,6 +1,6 @@
 # AI Product Lab
 
-A production-minded enterprise AI system built in public increments: start with messy data, make it trustworthy, make it searchable, and only then give an AI permission to reason or act on it.
+A private engineering prototype built in reviewable increments: start with messy data, make it trustworthy, make it searchable, and only then give an AI permission to reason or act on it.
 
 ## The problem
 
@@ -56,7 +56,7 @@ Entity resolution ---> confidence + evidence ---> human review when uncertain
       v
 Trusted entities
       |
-      +----> search / retrieval          (next)
+      +----> permission-scoped lexical retrieval (internal baseline)
       +----> grounded AI context         (later)
       +----> controlled tools / actions  (later)
 
@@ -66,12 +66,13 @@ evals | authorization | observability | reliability | latency | cost
 
 The repository currently contains:
 
-- a FastAPI service with `/health` and `/v1/resolve`
+- a local FastAPI service with `/health`, `/v1/resolve`, and `/v1/ingest`
 - Pydantic contracts for canonical records and resolution responses
 - email and phone normalization
 - deterministic + fuzzy entity matching with explainable evidence
-- confidence-based human-review routing
-- replay-safe batch-ingestion logic
+- confidence-based human-review routing, including close-score ambiguity checks
+- replay-safe batch ingestion with in-process atomic classification and writes (not cross-worker durable transactions)
+- internal permission-scoped lexical search with synthetic quality metrics; no public search endpoint or tenant authorization
 - entity-resolution evals
 - pytest coverage for matching and ingestion behavior
 - Ruff + pytest in GitHub Actions
@@ -82,7 +83,7 @@ See [the roadmap](docs/ROADMAP.md) for how this grows from a small trustworthy c
 
 This repo is meant to demonstrate engineering judgment, not the number of infrastructure logos that can fit in a diagram.
 
-There is no Kafka yet because there is no measured throughput problem that requires Kafka. There is no dedicated vector database because retrieval has not yet established a lexical baseline. There is no agent because the product does not yet have a workflow where autonomy beats deterministic software.
+There is no Kafka yet because there is no measured throughput problem that requires Kafka. There is no dedicated vector database because the existing lexical baseline has not yet been evaluated on a representative judged-query set. There is no agent because the product does not yet have a workflow where autonomy beats deterministic software.
 
 Complexity has to earn its way into the system.
 
@@ -136,10 +137,12 @@ app/
   main.py          API boundary
   models.py        canonical request/response contracts
   ingestion.py     replay-safe ingestion semantics
-  resolution.py    normalization and entity matching
+  resolution.py    explainable entity matching and ambiguity routing
+  search.py        internal lexical retrieval with caller-provided source scope
 
 evals/
-  entity_resolution.py   measurable matching baseline
+  entity_resolution.py   matching metrics
+  retrieval.py           lexical retrieval metrics
 
 tests/             behavioral and evaluation tests
 docs/ROADMAP.md    product and engineering roadmap
@@ -160,6 +163,6 @@ docs/ROADMAP.md    product and engineering roadmap
 
 ## Current status
 
-**Phase 1 — trustworthy data foundation.**
+**Phase 1 — local data and retrieval prototype.**
 
-Entity resolution and replay-safe ingestion are implemented. The next useful boundary is exposing ingestion through the API and then introducing durable persistence without changing the semantics already covered by tests.
+The local API already exposes ingestion; entity matching now sends close-scoring candidates to review. Ingestion is replay-safe within one process, but state disappears on restart and the API has no caller authentication or tenant isolation. Do not expose it to untrusted networks. Internal lexical search is available as a baseline, not as an authorized API; its synthetic smoke evaluation is not evidence of real-world search quality. The immediate work is tenant/caller authorization, durable storage and a judged retrieval fixture before deploying or adding model-driven search. See [tenant isolation](https://github.com/likhithnadella/ai-product-lab/issues/8) and [retrieval evaluation](https://github.com/likhithnadella/ai-product-lab/issues/9).
