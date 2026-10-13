@@ -65,7 +65,7 @@ def search_records(
     folded_query = _fold(query.strip())
     # Only a phone-shaped query can bypass lexical term matching. Mixed
     # letters and digits must never become an accidental phone lookup.
-    phone_query = re.sub(r"[\\s()+.\\-]", "", query)
+    phone_query = re.sub(r"[\s()+.\-]", "", query)
     query_digits = phone_query if phone_query.isascii() and phone_query.isdecimal() else ""
     phone_lookup = len(query_digits) >= 7
 
