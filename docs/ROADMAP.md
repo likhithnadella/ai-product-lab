@@ -12,15 +12,15 @@ Build the canonical contract, normalization, explainable entity resolution, conf
 
 **Evidence to leave behind:** behavioral tests plus precision, recall, false-merge/review measurements.
 
-**Current state:** in progress. Entity-resolution evaluation and replay-safe batch ingestion exist; durable persistence does not.
+**Current state:** the local ingestion API, in-process atomic replay handling, and ambiguity-aware resolution exist. Persistence, tenant authorization, and representative matching evaluation are not established.
 
 ## 2. Can users find the right thing?
 
 A trustworthy store is not useful if retrieval is poor.
 
-Start with lexical search and a representative query set. Measure quality and latency before adding embeddings. Add query rewriting, vector retrieval, hybrid search, and reranking only when experiments show where each technique helps.
+An internal lexical baseline and synthetic smoke metrics now exist. Next, build a representative judged-query set before changing ranking or adding embeddings. Measure quality and latency before adding embeddings. Add query rewriting, vector retrieval, hybrid search, and reranking only when experiments show where each technique helps.
 
-**Evidence:** Recall@K, MRR/NDCG where appropriate, zero-result rate, p50/p95 latency, and cost. Authorization filters must survive every retrieval path.
+**Evidence:** Recall@K, MRR/NDCG where appropriate, zero-result rate, p50/p95 latency, and cost. Authorization filters must survive every retrieval path. The current caller-supplied source scope is not tenant authorization; do not expose search publicly until that boundary exists.
 
 ## 3. Can a model answer without inventing context?
 
@@ -40,7 +40,7 @@ Introduce schema-validated tools, MCP where interoperability is useful, explicit
 
 ## 5. What changes when this becomes a real service?
 
-Move from in-memory behavior to Postgres with migrations and transaction boundaries. Add background work when synchronous processing becomes inappropriate. Introduce caching, rate limits, retries/backoff, timeouts, circuit breakers, and dead-letter/replay behavior as failure modes demand them.
+The current process-local store is a deliberately temporary implementation; move to Postgres with migrations and transaction boundaries after defining tenant ownership and access checks. Add background work when synchronous processing becomes inappropriate. Introduce caching, rate limits, retries/backoff, timeouts, circuit breakers, and dead-letter/replay behavior as failure modes demand them.
 
 Instrument structured logs, traces, metrics, and SLOs. Threat-model PII, tenant isolation, prompt injection, tool permissions, secrets, and audit history.
 
