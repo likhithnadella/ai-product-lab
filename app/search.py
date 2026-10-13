@@ -63,8 +63,11 @@ def search_records(
         return []
 
     folded_query = _fold(query.strip())
-    query_digits = "".join(char for char in query if char.isdigit())
-    phone_lookup = query_digits and len(query_digits) >= 7 and len(query_terms) == 1
+    # Only a phone-shaped query can bypass lexical term matching. Mixed
+    # letters and digits must never become an accidental phone lookup.
+    phone_query = re.sub(r"[\\s()+.\\-]", "", query)
+    query_digits = phone_query if phone_query.isascii() and phone_query.isdecimal() else ""
+    phone_lookup = len(query_digits) >= 7
 
     # Source identity is the ingestion key; repeated identical keys must not
     # appear twice in a search page. Last supplied record is authoritative.
