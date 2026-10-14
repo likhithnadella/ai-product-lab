@@ -4,6 +4,8 @@ Negative queries should not inflate ranking metrics: they instead expose
 false-positive results, a distinct failure mode for downstream AI context.
 """
 
+import pytest
+
 from app.models import IntakeRecord
 from app.search import search_records
 from evals.retrieval import RetrievalCase, evaluate_retrieval
@@ -33,6 +35,9 @@ def test_positive_retrieval_respects_scope() -> None:
         IntakeRecord(source="crm", external_id="1", first_name="Ada"),
         IntakeRecord(source="import", external_id="2", first_name="Ada"),
     ]
+    hits = search_records(records, "Ada", allowed_sources=frozenset({"crm"}))
+    assert [(hit.record.source, hit.record.external_id) for hit in hits] == [("crm", "1")]
+
     cases = [
         RetrievalCase(
             query="Ada",
@@ -44,3 +49,16 @@ def test_positive_retrieval_respects_scope() -> None:
     assert metrics["recall_at_k"] == 1.0
     assert metrics["precision_at_k"] == 1.0
     assert metrics["mrr_at_k"] == 1.0
+
+
+def test_relevance_judgments_outside_allowed_sources_are_rejected() -> None:
+    records = [IntakeRecord(source="import", external_id="2", first_name="Ada")]
+    cases = [
+        RetrievalCase(
+            query="Ada",
+            relevant_keys=frozenset({("import", "2")}),
+            allowed_sources=frozenset({"crm"}),
+        )
+    ]
+    with pytest.raises(ValueError, match="allowed source scope"):
+        evaluate_retrieval(records, cases)
