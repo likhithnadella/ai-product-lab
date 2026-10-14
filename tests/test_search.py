@@ -126,3 +126,25 @@ def test_unjudged_query_does_not_reduce_recall() -> None:
     assert metrics["judged_cases"] == 1
     assert metrics["recall_at_k"] == 1.0
     assert metrics["zero_result_rate"] == 0.5
+
+
+def test_us_country_code_phone_query_matches_canonical_record() -> None:
+    rows = [record("crm", "1", phone="(415) 555-0123")]
+    hits = search_records(rows, "+1 (415) 555-0123", allowed_sources=frozenset({"crm"}))
+    assert [hit.record.external_id for hit in hits] == ["1"]
+    assert "phone" in hits[0].matched_fields
+
+
+def test_country_code_phone_query_respects_source_scope() -> None:
+    rows = [
+        record("public", "1", phone="4155550123"),
+        record("private", "2", phone="4155550123"),
+    ]
+    hits = search_records(rows, "+1 415 555 0123", allowed_sources=frozenset({"public"}))
+    assert [(hit.record.source, hit.record.external_id) for hit in hits] == [("public", "1")]
+
+
+def test_other_country_code_is_not_treated_as_us_phone() -> None:
+    rows = [record("crm", "1", phone="4155550123")]
+    hits = search_records(rows, "+44 415 555 0123", allowed_sources=frozenset({"crm"}))
+    assert hits == []
