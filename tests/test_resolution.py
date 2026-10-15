@@ -94,6 +94,16 @@ def test_duplicate_source_identity_does_not_create_false_ambiguity():
     assert result.decision == "matched"
 
 
+def test_tied_review_candidate_is_stable_under_reordering():
+    incoming = IntakeRecord(source="csv", email="same@example.com", phone="2145550100")
+    first = IntakeRecord(source="crm", external_id="b", email="same@example.com", phone="2145550100")
+    second = IntakeRecord(source="crm", external_id="a", email="same@example.com", phone="2145550100")
+    forward = resolve(incoming, [first, second])
+    reversed_result = resolve(incoming, [second, first])
+    assert forward.decision == reversed_result.decision == "review"
+    assert forward.candidate.record_id == reversed_result.candidate.record_id == "a"
+
+
 @pytest.mark.parametrize(
     "settings",
     [

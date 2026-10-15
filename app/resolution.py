@@ -65,8 +65,12 @@ def resolve(
         else:
             anonymous.append(candidate)
 
+    # Stable source/identity ordering makes ambiguous review choices reproducible.
+    # Anonymous candidates have no durable identity; preserve their input order.
+    named = sorted(unique.items(), key=lambda pair: pair[0])
+    ordered = [record for _, record in named] + anonymous
     ranked = sorted(
-        (score_candidate(incoming, candidate) for candidate in [*unique.values(), *anonymous]),
+        (score_candidate(incoming, candidate) for candidate in ordered),
         key=lambda item: item.score,
         reverse=True,
     )
