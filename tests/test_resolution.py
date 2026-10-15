@@ -1,3 +1,5 @@
+import pytest
+
 from app.models import IntakeRecord
 from app.resolution import resolve, score_candidate
 
@@ -100,3 +102,19 @@ def test_tied_review_candidate_is_stable_under_reordering():
     reversed_result = resolve(incoming, [second, first])
     assert forward.decision == reversed_result.decision == "review"
     assert forward.candidate.record_id == reversed_result.candidate.record_id == "a"
+
+
+@pytest.mark.parametrize(
+    "settings",
+    [
+        {"review_threshold": -0.1},
+        {"auto_match_threshold": 1.1},
+        {"review_threshold": 0.9, "auto_match_threshold": 0.8},
+        {"ambiguity_margin": -0.01},
+        {"ambiguity_margin": 1.01},
+    ],
+)
+def test_invalid_threshold_configuration_fails_even_without_candidates(settings: dict) -> None:
+    incoming = IntakeRecord(source="crm")
+    with pytest.raises(ValueError):
+        resolve(incoming, [], **settings)
