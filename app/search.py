@@ -67,7 +67,12 @@ def search_records(
     # letters and digits must never become an accidental phone lookup.
     phone_query = re.sub(r"[\s()+.\-]", "", query)
     query_digits = phone_query if phone_query.isascii() and phone_query.isdecimal() else ""
-    # Canonical records store the last ten digits. A leading US country code\n    # is equivalent to the same ten-digit query, but do not silently strip\n    # arbitrary international prefixes or short partial numbers.\n    if len(query_digits) == 11 and query_digits.startswith("1"):\n        query_digits = query_digits[1:]\n    phone_lookup = 7 <= len(query_digits) <= 10
+    # Canonical records store the last ten digits. A leading US country code
+    # is equivalent to the same ten-digit query, but do not silently strip
+    # arbitrary international prefixes or short partial numbers.
+    if len(query_digits) == 11 and query_digits.startswith("1"):
+        query_digits = query_digits[1:]
+    phone_lookup = 7 <= len(query_digits) <= 10
 
     # Source identity is the ingestion key; repeated identical keys must not
     # appear twice in a search page. Last supplied record is authoritative.
