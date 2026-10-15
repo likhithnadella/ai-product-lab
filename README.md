@@ -1,6 +1,6 @@
 # AI Product Lab
 
-A private engineering prototype built in reviewable increments: start with messy data, make it trustworthy, make it searchable, and only then give an AI permission to reason or act on it.
+An engineering prototype built in reviewable increments: start with messy data, make it trustworthy, make it searchable, and only then give an AI permission to reason or act on it.
 
 ## The problem
 
@@ -143,6 +143,7 @@ app/
 evals/
   entity_resolution.py   matching metrics
   retrieval.py           lexical retrieval metrics
+  judged_fixtures.py     small synthetic relevance and scope regression cases
 
 tests/             behavioral and evaluation tests
 docs/ROADMAP.md    product and engineering roadmap
@@ -165,4 +166,4 @@ docs/ROADMAP.md    product and engineering roadmap
 
 **Phase 1 — local data and retrieval prototype.**
 
-The local API already exposes ingestion; entity matching now sends close-scoring candidates to review. Ingestion is replay-safe within one process, but state disappears on restart and the API has no caller authentication or tenant isolation. Do not expose it to untrusted networks. Internal lexical search is available as a baseline, not as an authorized API; its synthetic smoke evaluation is not evidence of real-world search quality. The immediate work is tenant/caller authorization, durable storage and a judged retrieval fixture before deploying or adding model-driven search. See [tenant isolation](https://github.com/likhithnadella/ai-product-lab/issues/8) and [retrieval evaluation](https://github.com/likhithnadella/ai-product-lab/issues/9).
+The local API exposes ingestion; entity matching sends close-scoring candidates to review. Ingestion is replay-safe within one process, but state disappears on restart and the API has no caller authentication or tenant isolation. **Run locally only; do not expose it to untrusted networks or ingest real customer data.** The caller-supplied source scope in internal search is not an authorization boundary, and the HTTP API does not authenticate callers. Internal lexical search is available as a baseline, not as an authorized API; its synthetic smoke evaluation is not evidence of real-world search quality. The immediate work is tenant/caller authorization, durable storage, and expanding the small synthetic judged retrieval fixture into a representative evaluation set before deployment or model-driven search. See [tenant isolation](https://github.com/likhithnadella/ai-product-lab/issues/8) and [retrieval evaluation](https://github.com/likhithnadella/ai-product-lab/issues/9).
