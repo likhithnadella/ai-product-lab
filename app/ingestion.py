@@ -42,11 +42,11 @@ class InMemoryRecordStore:
         with self._lock:
             existing = self._records.get(key)
             if existing is None:
-                self._records[key] = record.model_copy(deep=True).model_copy(deep=True)
+                self._records[key] = record.model_copy(deep=True)
                 return "created"
             if existing == record:
                 return "unchanged"
-            self._records[key] = record
+            self._records[key] = record.model_copy(deep=True)
             return "updated"
 
     def all(self) -> list[IntakeRecord]:
