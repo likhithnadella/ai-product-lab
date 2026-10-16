@@ -117,3 +117,28 @@ def test_concurrent_distinct_source_keys_do_not_collide() -> None:
 
     assert statuses == ["created"] * participants
     assert len(store.all()) == participants
+
+
+def test_store_copies_records_on_create_and_update() -> None:
+    store = InMemoryRecordStore()
+    incoming = record("row-1", attributes={"origin": "initial"})
+    assert store.upsert(incoming) == "created"
+    incoming.attributes["origin"] = "mutated"
+    assert store.get("csv_import", "row-1").attributes["origin"] == "initial"
+
+    updated = record("row-1", attributes={"origin": "updated"})
+    assert store.upsert(updated) == "updated"
+    updated.attributes["origin"] = "mutated-again"
+    assert store.get("csv_import", "row-1").attributes["origin"] == "updated"
+
+
+def test_store_get_and_all_do_not_expose_mutable_internal_state() -> None:
+    store = InMemoryRecordStore()
+    store.put(record("row-1", attributes={"team": "original"}))
+    retrieved = store.get("csv_import", "row-1")
+    assert retrieved is not None
+    retrieved.attributes["team"] = "changed"
+    snapshot = store.all()
+    snapshot[0].attributes["team"] = "also-changed"
+    assert store.get("csv_import", "row-1").attributes["team"] == "original"
+    assert store.upsert(record("row-1", attributes={"team": "original"})) == "unchanged"
