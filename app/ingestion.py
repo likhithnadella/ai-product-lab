@@ -14,6 +14,8 @@ class InMemoryRecordStore:
     It does not provide durability or coordination across worker processes.
     A database implementation must enforce the same source identity with a
     unique constraint and a transaction, not a read-then-write pair.
+    Records are copied at the boundary: a caller must not mutate stored
+    state without going through an upsert and its status classification.
     """
 
     def __init__(self) -> None:
@@ -22,13 +24,14 @@ class InMemoryRecordStore:
 
     def get(self, source: str, external_id: str) -> IntakeRecord | None:
         with self._lock:
-            return self._records.get((source, external_id))
+            stored = self._records.get((source, external_id))
+            return stored.model_copy(deep=True) if stored is not None else None
 
     def put(self, record: IntakeRecord) -> None:
         if not record.external_id:
             raise ValueError("external_id is required for persisted ingestion records")
         with self._lock:
-            self._records[(record.source, record.external_id)] = record
+            self._records[(record.source, record.external_id)] = record.model_copy(deep=True)
 
     def upsert(self, record: IntakeRecord) -> UpsertStatus:
         """Classify and apply one source record under the same lock."""
@@ -39,7 +42,7 @@ class InMemoryRecordStore:
         with self._lock:
             existing = self._records.get(key)
             if existing is None:
-                self._records[key] = record
+                self._records[key] = record.model_copy(deep=True).model_copy(deep=True)
                 return "created"
             if existing == record:
                 return "unchanged"
@@ -48,7 +51,7 @@ class InMemoryRecordStore:
 
     def all(self) -> list[IntakeRecord]:
         with self._lock:
-            return list(self._records.values())
+            return [record.model_copy(deep=True) for record in self._records.values()]
 
 
 def ingest_batch(
