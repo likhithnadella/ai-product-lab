@@ -1,6 +1,8 @@
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
 
+import pytest
+
 from app.ingestion import InMemoryRecordStore, ingest_batch
 from app.models import IntakeRecord
 
@@ -117,3 +119,41 @@ def test_concurrent_distinct_source_keys_do_not_collide() -> None:
 
     assert statuses == ["created"] * participants
     assert len(store.all()) == participants
+
+
+@pytest.mark.parametrize("source", ["", "   ", "\t"])
+def test_blank_source_is_rejected_without_writing(source: str) -> None:
+    store = InMemoryRecordStore()
+
+    result = ingest_batch([record("row-1", source=source)], store)
+
+    assert result.rejected == 1
+    assert result.created == 0
+    assert result.items[0].reason == "source_required"
+    assert result.items[0].external_id == "row-1"
+    assert store.all() == []
+
+
+def test_blank_source_does_not_block_valid_records_in_same_batch() -> None:
+    store = InMemoryRecordStore()
+    batch = [record("row-1", source=" "), record("row-2")]
+
+    result = ingest_batch(batch, store)
+
+    assert result.rejected == 1
+    assert result.created == 1
+    assert [item.status for item in result.items] == ["rejected", "created"]
+    assert [item.source for item in store.all()] == ["csv_import"]
+
+
+@pytest.mark.parametrize("source", ["", "   "])
+def test_store_put_and_upsert_reject_blank_source(source: str) -> None:
+    store = InMemoryRecordStore()
+    blank = record("row-1", source=source)
+
+    with pytest.raises(ValueError, match="source is required"):
+        store.put(blank)
+    with pytest.raises(ValueError, match="source is required"):
+        store.upsert(blank)
+
+    assert store.all() == []

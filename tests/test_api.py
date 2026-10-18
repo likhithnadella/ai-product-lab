@@ -54,3 +54,13 @@ def test_ingest_endpoint_rejects_invalid_request_shape() -> None:
     api = client()
     response = api.post("/v1/ingest", json={"records": "not-a-list"})
     assert response.status_code == 422
+
+
+def test_ingest_endpoint_reports_blank_source_as_domain_rejection() -> None:
+    api = client()
+    response = api.post("/v1/ingest", json=payload(source="  "))
+    assert response.status_code == 200
+    body = response.json()
+    assert body["rejected"] == 1
+    assert body["items"][0]["reason"] == "source_required"
+    assert main.record_store.all() == []
