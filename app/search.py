@@ -53,9 +53,9 @@ def search_records(
     """
     if not isinstance(allowed_sources, frozenset):
         raise TypeError("allowed_sources must be a frozenset from trusted authorization")
-    if not 1 <= limit <= 100:
+    if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 100:
         raise ValueError("limit must be between 1 and 100")
-    if not 0 <= offset <= 10000:
+    if isinstance(offset, bool) or not isinstance(offset, int) or not 0 <= offset <= 10000:
         raise ValueError("offset must be between 0 and 10000")
 
     query_terms = _validate_query(query)
