@@ -144,3 +144,16 @@ def test_blank_source_does_not_block_valid_records_in_same_batch() -> None:
     assert result.created == 1
     assert [item.status for item in result.items] == ["rejected", "created"]
     assert [item.source for item in store.all()] == ["csv_import"]
+
+
+@pytest.mark.parametrize("source", ["", "   "])
+def test_store_put_and_upsert_reject_blank_source(source: str) -> None:
+    store = InMemoryRecordStore()
+    blank = record("row-1", source=source)
+
+    with pytest.raises(ValueError, match="source is required"):
+        store.put(blank)
+    with pytest.raises(ValueError, match="source is required"):
+        store.upsert(blank)
+
+    assert store.all() == []

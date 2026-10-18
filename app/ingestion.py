@@ -25,6 +25,8 @@ class InMemoryRecordStore:
             return self._records.get((source, external_id))
 
     def put(self, record: IntakeRecord) -> None:
+        if not record.source.strip():
+            raise ValueError("source is required for persisted ingestion records")
         if not record.external_id:
             raise ValueError("external_id is required for persisted ingestion records")
         with self._lock:
@@ -32,6 +34,8 @@ class InMemoryRecordStore:
 
     def upsert(self, record: IntakeRecord) -> UpsertStatus:
         """Classify and apply one source record under the same lock."""
+        if not record.source.strip():
+            raise ValueError("source is required for persisted ingestion records")
         if not record.external_id:
             raise ValueError("external_id is required for persisted ingestion records")
 
