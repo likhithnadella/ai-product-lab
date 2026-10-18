@@ -1,4 +1,5 @@
 from difflib import SequenceMatcher
+from math import isfinite
 
 from app.models import IntakeRecord, MatchCandidate, ResolutionResult
 
@@ -48,6 +49,14 @@ def resolve(
     review_threshold: float = 0.65,
     ambiguity_margin: float = 0.05,
 ) -> ResolutionResult:
+    settings = (review_threshold, auto_match_threshold, ambiguity_margin)
+    if any(
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not isfinite(value)
+        for value in settings
+    ):
+        raise ValueError("resolution settings must be finite numbers, not booleans")
     if not 0 <= review_threshold <= auto_match_threshold <= 1:
         raise ValueError("thresholds must satisfy 0 <= review <= auto_match <= 1")
     if not 0 <= ambiguity_margin <= 1:
