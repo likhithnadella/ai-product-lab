@@ -1,6 +1,8 @@
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
 
+import pytest
+
 from app.ingestion import InMemoryRecordStore, ingest_batch
 from app.models import IntakeRecord
 
@@ -117,3 +119,16 @@ def test_concurrent_distinct_source_keys_do_not_collide() -> None:
 
     assert statuses == ["created"] * participants
     assert len(store.all()) == participants
+
+
+@pytest.mark.parametrize("identifier", ["", " ", "\\t", "  \\n  "])
+def test_blank_source_identity_is_rejected(identifier: str) -> None:
+    store = InMemoryRecordStore()
+    outcome = ingest_batch([record(identifier)], store)
+    assert outcome.rejected == 1
+    assert outcome.items[0].reason == "external_id_required_for_idempotency"
+    assert store.all() == []
+    with pytest.raises(ValueError):
+        store.put(record(identifier))
+    with pytest.raises(ValueError):
+        store.upsert(record(identifier))
