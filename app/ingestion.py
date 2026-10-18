@@ -63,6 +63,17 @@ def ingest_batch(
     items: list[IngestionItemResult] = []
 
     for record in records:
+        if not record.source.strip():
+            items.append(
+                IngestionItemResult(
+                    source=record.source,
+                    external_id=record.external_id,
+                    status="rejected",
+                    reason="source_required",
+                )
+            )
+            continue
+
         if not record.external_id:
             items.append(
                 IngestionItemResult(
