@@ -68,7 +68,15 @@ def ingest_batch(
 
     for record in records:
         if not record.source.strip():
-            raise ValueError("source is required for persisted ingestion records")
+            items.append(
+                IngestionItemResult(
+                    source=record.source,
+                    external_id=record.external_id,
+                    status="rejected",
+                    reason="source_required",
+                )
+            )
+            continue
         if not record.external_id or not record.external_id.strip():
             items.append(
                 IngestionItemResult(
