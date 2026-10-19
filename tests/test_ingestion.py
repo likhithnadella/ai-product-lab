@@ -141,3 +141,16 @@ def test_valid_external_ids_remain_opaque_and_replayable() -> None:
         assert ingest_batch([record(identifier)], store).unchanged == 1
         assert store.get("csv_import", identifier).external_id == identifier
     assert len(store.all()) == 3
+
+
+@pytest.mark.parametrize("source", ["", "   ", "\t"])
+def test_blank_source_is_rejected_after_external_id_fix(source: str) -> None:
+    store = InMemoryRecordStore()
+    result = ingest_batch([record("valid-id", source=source), record("valid-id")], store)
+    assert [item.status for item in result.items] == ["rejected", "created"]
+    assert result.items[0].reason == "source_required"
+    with pytest.raises(ValueError, match="source is required"):
+        store.put(record("valid-id", source=source))
+    with pytest.raises(ValueError, match="source is required"):
+        store.upsert(record("valid-id", source=source))
+    assert len(store.all()) == 1
