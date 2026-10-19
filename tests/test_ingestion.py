@@ -121,8 +121,8 @@ def test_concurrent_distinct_source_keys_do_not_collide() -> None:
     assert len(store.all()) == participants
 
 
-@pytest.mark.parametrize("identifier", ["", " ", "\\t", "  \\n  "])
-def test_blank_source_identity_is_rejected(identifier: str) -> None:
+@pytest.mark.parametrize("identifier", ["", " ", "\t", "  \n  "])
+def test_blank_external_identity_is_rejected(identifier: str) -> None:
     store = InMemoryRecordStore()
     outcome = ingest_batch([record(identifier)], store)
     assert outcome.rejected == 1
@@ -132,3 +132,12 @@ def test_blank_source_identity_is_rejected(identifier: str) -> None:
         store.put(record(identifier))
     with pytest.raises(ValueError):
         store.upsert(record(identifier))
+
+
+def test_valid_external_ids_remain_opaque_and_replayable() -> None:
+    store = InMemoryRecordStore()
+    for identifier in (" row-1 ", "row-1", "a\\tb"):
+        assert ingest_batch([record(identifier)], store).created == 1
+        assert ingest_batch([record(identifier)], store).unchanged == 1
+        assert store.get("csv_import", identifier).external_id == identifier
+    assert len(store.all()) == 3
