@@ -35,7 +35,7 @@ A CRM sync can retry. A batch can be replayed. The same external identifier can 
 - **Ingestion identity:** have we already processed this source record?
 - **Entity identity:** do two different source records represent the same real-world entity?
 
-The ingestion layer therefore uses `(source, external_id)` as its stable key and reports each item as `created`, `updated`, `unchanged`, or `rejected`. Tests cover replay safety, updates, source isolation, invalid input, and mixed batches.
+The ingestion layer therefore uses `(source, external_id)` as its stable key and reports each item as `created`, `updated`, `unchanged`, or `rejected`. A blank `source` or a missing `external_id` is rejected per item (`source_required` or `external_id_required_for_idempotency`) without touching the store. Tests cover replay safety, updates, source isolation, invalid input, and mixed batches.
 
 The store is still in memory on purpose. The current goal is to get the contract and failure semantics right before persistence makes those decisions harder to change. Postgres, migrations, and transaction boundaries come after the behavior is understood.
 
