@@ -27,7 +27,7 @@ class InMemoryRecordStore:
     def put(self, record: IntakeRecord) -> None:
         if not record.source.strip():
             raise ValueError("source is required for persisted ingestion records")
-        if not record.external_id:
+        if not record.external_id or not record.external_id.strip():
             raise ValueError("external_id is required for persisted ingestion records")
         with self._lock:
             self._records[(record.source, record.external_id)] = record
@@ -36,7 +36,7 @@ class InMemoryRecordStore:
         """Classify and apply one source record under the same lock."""
         if not record.source.strip():
             raise ValueError("source is required for persisted ingestion records")
-        if not record.external_id:
+        if not record.external_id or not record.external_id.strip():
             raise ValueError("external_id is required for persisted ingestion records")
 
         key = (record.source, record.external_id)
@@ -77,8 +77,7 @@ def ingest_batch(
                 )
             )
             continue
-
-        if not record.external_id:
+        if not record.external_id or not record.external_id.strip():
             items.append(
                 IngestionItemResult(
                     source=record.source,

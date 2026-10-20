@@ -121,6 +121,41 @@ def test_concurrent_distinct_source_keys_do_not_collide() -> None:
     assert len(store.all()) == participants
 
 
+@pytest.mark.parametrize("identifier", ["", " ", "\t", "  \n  "])
+def test_blank_external_identity_is_rejected(identifier: str) -> None:
+    store = InMemoryRecordStore()
+    outcome = ingest_batch([record(identifier)], store)
+    assert outcome.rejected == 1
+    assert outcome.items[0].reason == "external_id_required_for_idempotency"
+    assert store.all() == []
+    with pytest.raises(ValueError):
+        store.put(record(identifier))
+    with pytest.raises(ValueError):
+        store.upsert(record(identifier))
+
+
+def test_valid_external_ids_remain_opaque_and_replayable() -> None:
+    store = InMemoryRecordStore()
+    for identifier in (" row-1 ", "row-1", "a\\tb"):
+        assert ingest_batch([record(identifier)], store).created == 1
+        assert ingest_batch([record(identifier)], store).unchanged == 1
+        assert store.get("csv_import", identifier).external_id == identifier
+    assert len(store.all()) == 3
+
+
+@pytest.mark.parametrize("source", ["", "   ", "\t"])
+def test_blank_source_is_rejected_after_external_id_fix(source: str) -> None:
+    store = InMemoryRecordStore()
+    result = ingest_batch([record("valid-id", source=source), record("valid-id")], store)
+    assert [item.status for item in result.items] == ["rejected", "created"]
+    assert result.items[0].reason == "source_required"
+    with pytest.raises(ValueError, match="source is required"):
+        store.put(record("valid-id", source=source))
+    with pytest.raises(ValueError, match="source is required"):
+        store.upsert(record("valid-id", source=source))
+    assert len(store.all()) == 1
+
+
 @pytest.mark.parametrize("source", ["", "   ", "\t"])
 def test_blank_source_is_rejected_without_writing(source: str) -> None:
     store = InMemoryRecordStore()
