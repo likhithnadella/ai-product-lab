@@ -14,8 +14,7 @@ class InMemoryRecordStore:
     It does not provide durability or coordination across worker processes.
     A database implementation must enforce the same source identity with a
     unique constraint and a transaction, not a read-then-write pair.
-    Records are copied at the boundary: a caller must not mutate stored
-    state without going through an upsert and its status classification.
+    Records are copied at the boundary to prevent out-of-band mutations.
     """
 
     def __init__(self) -> None:
@@ -28,14 +27,18 @@ class InMemoryRecordStore:
             return stored.model_copy(deep=True) if stored is not None else None
 
     def put(self, record: IntakeRecord) -> None:
-        if not record.external_id:
+        if not record.source.strip():
+            raise ValueError("source is required for persisted ingestion records")
+        if not record.external_id or not record.external_id.strip():
             raise ValueError("external_id is required for persisted ingestion records")
         with self._lock:
             self._records[(record.source, record.external_id)] = record.model_copy(deep=True)
 
     def upsert(self, record: IntakeRecord) -> UpsertStatus:
         """Classify and apply one source record under the same lock."""
-        if not record.external_id:
+        if not record.source.strip():
+            raise ValueError("source is required for persisted ingestion records")
+        if not record.external_id or not record.external_id.strip():
             raise ValueError("external_id is required for persisted ingestion records")
 
         key = (record.source, record.external_id)
@@ -66,7 +69,17 @@ def ingest_batch(
     items: list[IngestionItemResult] = []
 
     for record in records:
-        if not record.external_id:
+        if not record.source.strip():
+            items.append(
+                IngestionItemResult(
+                    source=record.source,
+                    external_id=record.external_id,
+                    status="rejected",
+                    reason="source_required",
+                )
+            )
+            continue
+        if not record.external_id or not record.external_id.strip():
             items.append(
                 IngestionItemResult(
                     source=record.source,
