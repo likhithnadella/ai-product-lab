@@ -37,3 +37,22 @@ def test_judged_report_is_reproducible_and_bounded() -> None:
     assert first["judged_cases"] == sum(bool(case.relevant_keys) for case in CASES)
     for metric in ("recall_at_k", "precision_at_k", "mrr_at_k", "zero_result_rate"):
         assert 0 <= first[metric] <= 1
+
+
+@pytest.mark.parametrize("bad_k", [True, False, 1.5, "5", None, 0, 101])
+def test_evaluator_rejects_invalid_cutoffs(bad_k: object) -> None:
+    with pytest.raises(ValueError, match="k must be"):
+        evaluate_retrieval([], [], k=bad_k)  # type: ignore[arg-type]
+
+
+def test_evaluator_rejects_unknown_relevance_identity() -> None:
+    rows = [IntakeRecord(source="crm", external_id="c1", first_name="Ada")]
+    case = RetrievalCase("Ada", frozenset({("crm", "missing")}), frozenset({"crm"}))
+    with pytest.raises(ValueError, match="unknown record identities"):
+        evaluate_retrieval(rows, [case])
+
+
+def test_evaluator_rejects_duplicate_source_identities() -> None:
+    row = IntakeRecord(source="crm", external_id="c1", first_name="Ada")
+    with pytest.raises(ValueError, match="duplicate source identities"):
+        evaluate_retrieval([row, row.model_copy()], [])

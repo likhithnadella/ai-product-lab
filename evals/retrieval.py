@@ -22,14 +22,21 @@ def evaluate_retrieval(
     k: int = 5,
 ) -> dict[str, float | int]:
     """Recall@K and MRR@K for judged queries; zero-result rate for all cases."""
-    if not 1 <= k <= 100:
+    if isinstance(k, bool) or not isinstance(k, int) or not 1 <= k <= 100:
         raise ValueError("k must be between 1 and 100")
+
+    keys = [(record.source, record.external_id) for record in records]
+    if len(keys) != len(set(keys)):
+        raise ValueError("evaluation records contain duplicate source identities")
+    available_keys = set(keys)
 
     recall_sum = reciprocal_rank_sum = precision_sum = 0.0
     judged = zero_results = 0
     for case in cases:
         if any(source not in case.allowed_sources for source, _ in case.relevant_keys):
             raise ValueError("relevance judgments must respect the allowed source scope")
+        if not case.relevant_keys <= available_keys:
+            raise ValueError("relevance judgments reference unknown record identities")
         hits = search_records(records, case.query, allowed_sources=case.allowed_sources, limit=k)
         found = [(hit.record.source, hit.record.external_id) for hit in hits]
         if not found:
