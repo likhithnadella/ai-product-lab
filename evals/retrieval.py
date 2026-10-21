@@ -31,7 +31,7 @@ def evaluate_retrieval(
     available_keys = set(keys)
 
     recall_sum = reciprocal_rank_sum = precision_sum = 0.0
-    judged = zero_results = 0
+    judged = zero_results = negative_cases = false_positive_cases = 0
     for case in cases:
         if any(source not in case.allowed_sources for source, _ in case.relevant_keys):
             raise ValueError("relevance judgments must respect the allowed source scope")
@@ -42,6 +42,9 @@ def evaluate_retrieval(
         if not found:
             zero_results += 1
         if not case.relevant_keys:
+            negative_cases += 1
+            if found:
+                false_positive_cases += 1
             continue
 
         judged += 1
@@ -60,4 +63,8 @@ def evaluate_retrieval(
         "precision_at_k": precision_sum / judged if judged else 0.0,
         "mrr_at_k": reciprocal_rank_sum / judged if judged else 0.0,
         "zero_result_rate": zero_results / len(cases) if cases else 0.0,
+        "negative_cases": negative_cases,
+        "false_positive_rate_on_negatives": (
+            false_positive_cases / negative_cases if negative_cases else 0.0
+        ),
     }
