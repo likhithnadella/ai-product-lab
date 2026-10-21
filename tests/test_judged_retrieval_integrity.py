@@ -56,3 +56,24 @@ def test_evaluator_rejects_duplicate_source_identities() -> None:
     row = IntakeRecord(source="crm", external_id="c1", first_name="Ada")
     with pytest.raises(ValueError, match="duplicate source identities"):
         evaluate_retrieval([row, row.model_copy()], [])
+
+
+def test_negative_queries_report_false_positive_rate() -> None:
+    rows = [IntakeRecord(source="crm", external_id="c1", first_name="Ada")]
+    cases = [
+        RetrievalCase("Ada", frozenset(), frozenset({"crm"})),
+        RetrievalCase("not present", frozenset(), frozenset({"crm"})),
+    ]
+    report = evaluate_retrieval(rows, cases)
+    assert report["negative_cases"] == 2
+    assert report["false_positive_rate_on_negatives"] == 0.5
+    assert report["zero_result_rate"] == 0.5
+    assert report["judged_cases"] == 0
+
+
+def test_no_negative_cases_have_zero_false_positive_rate() -> None:
+    rows = [IntakeRecord(source="crm", external_id="c1", first_name="Ada")]
+    case = RetrievalCase("Ada", frozenset({("crm", "c1")}), frozenset({"crm"}))
+    report = evaluate_retrieval(rows, [case])
+    assert report["negative_cases"] == 0
+    assert report["false_positive_rate_on_negatives"] == 0.0
