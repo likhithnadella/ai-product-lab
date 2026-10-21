@@ -18,9 +18,9 @@ Build the canonical contract, normalization, explainable entity resolution, conf
 
 A trustworthy store is not useful if retrieval is poor.
 
-An internal lexical baseline and synthetic smoke metrics now exist. Next, build a representative judged-query set before changing ranking or adding embeddings. Measure quality and latency before adding embeddings. Add query rewriting, vector retrieval, hybrid search, and reranking only when experiments show where each technique helps.
+An internal lexical baseline and a small versioned synthetic judged-query fixture now exist. It measures positive-query recall/precision/MRR and negative-query false-positive rate, including a source-scoped negative query. The fixture is too small and hand-selected to establish real-world retrieval quality. Expand representative judgments and record baseline results before changing ranking or adding embeddings. Measure quality and latency before adding embeddings. Add query rewriting, vector retrieval, hybrid search, and reranking only when experiments show where each technique helps.
 
-**Evidence:** Recall@K, MRR/NDCG where appropriate, zero-result rate, p50/p95 latency, and cost. Authorization filters must survive every retrieval path. The current caller-supplied source scope is not tenant authorization; do not expose search publicly until that boundary exists.
+**Evidence:** Recall@K, Precision@K, MRR/NDCG where appropriate, zero-result rate, false-positive rate on negative queries, p50/p95 latency, and cost. Reproduce the current synthetic baseline with `python -m evals.judged_fixtures`; its results are regression signals, not production performance claims. Authorization filters must survive every retrieval path. The current caller-supplied source scope is not tenant authorization; do not expose search publicly until that boundary exists.
 
 ## 3. Can a model answer without inventing context?
 
