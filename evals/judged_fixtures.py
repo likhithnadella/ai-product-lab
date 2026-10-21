@@ -8,7 +8,7 @@ synthetic: it is a regression set, not evidence of real-world search quality.
 from app.models import IntakeRecord
 from evals.retrieval import RetrievalCase, evaluate_retrieval
 
-FIXTURE_VERSION = "2026-10-14.1"
+FIXTURE_VERSION = "2026-10-21.1"
 
 RECORDS = [
     IntakeRecord(source="crm", external_id="c1", first_name="Ada", last_name="Lovelace",
@@ -40,6 +40,8 @@ CASES = [
     RetrievalCase("Analytical", frozenset({("crm", "c1")}), frozenset({"crm"})),
     RetrievalCase("Grace Hopper", frozenset(), frozenset({"partner"})),
     RetrievalCase("missing person", frozenset(), frozenset({"crm", "import", "partner"})),
+    # Intentionally relevant-looking but outside the allowed source scope.
+    RetrievalCase("Ada Lovelace", frozenset(), frozenset({"partner"})),
 ]
 
 
