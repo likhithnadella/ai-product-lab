@@ -7,9 +7,9 @@ from evals.judged_fixtures import CASES, FIXTURE_VERSION, RECORDS, judged_report
 def test_report_reports_sample_size_and_fixture_version() -> None:
     report = judged_report(k=5)
     assert report["fixture_version"] == FIXTURE_VERSION
-    assert report["cases"] == len(CASES) == 9
+    assert report["cases"] == len(CASES) == 10
     assert report["judged_cases"] == 7
-    assert report["zero_result_rate"] == pytest.approx(2 / 9)
+    assert report["zero_result_rate"] == pytest.approx(3 / 10)
 
 
 def test_judged_metrics_match_hand_checked_values() -> None:
