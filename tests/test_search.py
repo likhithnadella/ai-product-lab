@@ -128,3 +128,9 @@ def test_unjudged_query_does_not_reduce_recall() -> None:
     assert metrics["judged_cases"] == 1
     assert metrics["recall_at_k"] == 1.0
     assert metrics["zero_result_rate"] == 0.5
+
+
+@pytest.mark.parametrize("limit, offset", [(True, 0), (1, False), (1.5, 0), (1, 2.5), ("1", 0)])
+def test_search_rejects_noninteger_pagination(limit, offset) -> None:
+    with pytest.raises(ValueError):
+        search_records([], "asha", allowed_sources=frozenset({"crm"}), limit=limit, offset=offset)
