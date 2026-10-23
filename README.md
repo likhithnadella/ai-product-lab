@@ -123,6 +123,14 @@ uvicorn app.main:app --reload
 
 The generated API documentation is available at `http://127.0.0.1:8000/docs`.
 
+**Unauthenticated demo endpoints are disabled by default.** `/health` remains available, while POST `/v1/ingest` and `/v1/resolve` return HTTP 503 unless a developer explicitly opts in. For synthetic data on your own machine only, start the server with:
+
+```bash
+AI_PRODUCT_LAB_ENABLE_UNAUTHENTICATED_DEMO=1 uvicorn app.main:app --host 127.0.0.1 --reload
+```
+
+This flag is **not authentication** and does not verify the server's network exposure. Never enable it for a public, shared, proxied, or untrusted deployment; use only synthetic records. Both demo endpoints validate a maximum of 1,000 records/candidates per request (HTTP 422 above the limit). These count limits do not cap request-body bytes, enforce authorization, or make the service production-ready.
+
 Run the same basic quality gates used by CI:
 
 ```bash
@@ -166,4 +174,4 @@ docs/ROADMAP.md    product and engineering roadmap
 
 **Phase 1 — local data and retrieval prototype.**
 
-The local API exposes ingestion; entity matching sends close-scoring candidates to review. Ingestion is replay-safe within one process, but state disappears on restart and the API has no caller authentication or tenant isolation. **Run locally only; do not expose it to untrusted networks or ingest real customer data.** The caller-supplied source scope in internal search is not an authorization boundary, and the HTTP API does not authenticate callers. Internal lexical search is available as a baseline, not as an authorized API; its synthetic smoke evaluation is not evidence of real-world search quality. The immediate work is tenant/caller authorization, durable storage, and expanding the small synthetic judged retrieval fixture into a representative evaluation set before deployment or model-driven search. See [tenant isolation](https://github.com/likhithnadella/ai-product-lab/issues/8) and [retrieval evaluation](https://github.com/likhithnadella/ai-product-lab/issues/9).
+The local API offers opt-in, unauthenticated demo ingestion and resolution; entity matching sends close-scoring candidates to review. Ingestion is replay-safe within one process, but state disappears on restart and the API has no caller authentication or tenant isolation. **Run locally only; do not expose it to untrusted networks or ingest real customer data.** The caller-supplied source scope in internal search is not an authorization boundary, and the HTTP API does not authenticate callers. Internal lexical search is available as a baseline, not as an authorized API; its synthetic smoke evaluation is not evidence of real-world search quality. The immediate work is tenant/caller authorization, durable storage, and expanding the small synthetic judged retrieval fixture into a representative evaluation set before deployment or model-driven search. See [tenant isolation](https://github.com/likhithnadella/ai-product-lab/issues/8) and [retrieval evaluation](https://github.com/likhithnadella/ai-product-lab/issues/9).
