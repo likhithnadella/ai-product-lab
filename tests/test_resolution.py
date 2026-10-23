@@ -118,3 +118,19 @@ def test_invalid_threshold_configuration_fails_even_without_candidates(settings:
     incoming = IntakeRecord(source="crm")
     with pytest.raises(ValueError):
         resolve(incoming, [], **settings)
+
+
+@pytest.mark.parametrize(
+    "settings",
+    [
+        {"auto_match_threshold": float("nan")},
+        {"review_threshold": float("inf")},
+        {"ambiguity_margin": float("-inf")},
+        {"auto_match_threshold": True},
+        {"review_threshold": False},
+        {"ambiguity_margin": True},
+    ],
+)
+def test_nonfinite_and_boolean_settings_are_rejected(settings: dict) -> None:
+    with pytest.raises(ValueError, match="finite numbers"):
+        resolve(IntakeRecord(source="crm"), [], **settings)
