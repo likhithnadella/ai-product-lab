@@ -1,7 +1,7 @@
 import os
 
 from fastapi import Depends, FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.ingestion import InMemoryRecordStore, ingest_batch
 from app.models import BatchIngestionResult, IntakeRecord, ResolutionResult
@@ -28,11 +28,11 @@ def require_unsafe_demo_opt_in() -> None:
 
 class ResolveRequest(BaseModel):
     incoming: IntakeRecord
-    candidates: list[IntakeRecord]
+    candidates: list[IntakeRecord] = Field(max_length=1000)
 
 
 class IngestRequest(BaseModel):
-    records: list[IntakeRecord]
+    records: list[IntakeRecord] = Field(max_length=1000)
 
 
 @app.get("/health")
