@@ -1,6 +1,12 @@
+import pytest
 from fastapi.testclient import TestClient
 
 from app import main
+
+
+@pytest.fixture(autouse=True)
+def enable_local_demo_for_existing_api_contract_tests(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AI_PRODUCT_LAB_ENABLE_UNAUTHENTICATED_DEMO", "1")
 
 
 def client() -> TestClient:
@@ -64,3 +70,22 @@ def test_ingest_endpoint_reports_blank_source_as_domain_rejection() -> None:
     assert body["rejected"] == 1
     assert body["items"][0]["reason"] == "source_required"
     assert main.record_store.all() == []
+
+
+def test_unsafe_api_routes_fail_closed_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("AI_PRODUCT_LAB_ENABLE_UNAUTHENTICATED_DEMO")
+    api = client()
+    assert api.post("/v1/ingest", json=payload()).status_code == 503
+    assert api.post(
+        "/v1/resolve", json={"incoming": {"source": "crm"}, "candidates": []}
+    ).status_code == 503
+    assert api.get("/health").status_code == 200
+    assert main.record_store.all() == []
+
+
+@pytest.mark.parametrize("flag", ["", "true", "0", "yes", " 1"])
+def test_only_exact_opt_in_enables_unsafe_api(
+    monkeypatch: pytest.MonkeyPatch, flag: str
+) -> None:
+    monkeypatch.setenv("AI_PRODUCT_LAB_ENABLE_UNAUTHENTICATED_DEMO", flag)
+    assert client().post("/v1/ingest", json=payload()).status_code == 503
