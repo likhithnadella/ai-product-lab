@@ -89,3 +89,29 @@ def test_only_exact_opt_in_enables_unsafe_api(
 ) -> None:
     monkeypatch.setenv("AI_PRODUCT_LAB_ENABLE_UNAUTHENTICATED_DEMO", flag)
     assert client().post("/v1/ingest", json=payload()).status_code == 503
+
+
+def test_ingestion_rejects_oversized_batch_without_partial_writes() -> None:
+    api = client()
+    records = [{"source": "crm", "external_id": f"row-{i}"} for i in range(1001)]
+    response = api.post("/v1/ingest", json={"records": records})
+    assert response.status_code == 422
+    assert main.record_store.all() == []
+
+
+def test_resolver_rejects_oversized_candidate_list() -> None:
+    api = client()
+    candidates = [{"source": "crm"} for _ in range(1001)]
+    response = api.post(
+        "/v1/resolve", json={"incoming": {"source": "crm"}, "candidates": candidates}
+    )
+    assert response.status_code == 422
+
+
+def test_ingestion_accepts_exact_batch_limit() -> None:
+    api = client()
+    records = [{"source": "crm", "external_id": f"row-{i}"} for i in range(1000)]
+    response = api.post("/v1/ingest", json={"records": records})
+    assert response.status_code == 200
+    assert response.json()["created"] == 1000
+    assert len(main.record_store.all()) == 1000
