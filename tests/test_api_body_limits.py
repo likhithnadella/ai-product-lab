@@ -59,3 +59,29 @@ def test_regular_small_ingestion_still_works(api: TestClient) -> None:
     )
     assert response.status_code == 200
     assert response.json()["created"] == 1
+
+
+@pytest.mark.parametrize("bad_length", ["bogus", "-1", "1, 2"])
+def test_malformed_content_length_is_rejected(
+    api: TestClient, bad_length: str
+) -> None:
+    response = api.post(
+        "/v1/ingest",
+        content=b'{"records":[]}',
+        headers={"content-type": "application/json", "content-length": bad_length},
+    )
+    assert response.status_code == 400
+    assert main.record_store.all() == []
+
+
+def test_underreported_content_length_cannot_bypass_actual_byte_limit(
+    api: TestClient,
+) -> None:
+    body = b'{"records":[' + b" " * MAX_BODY_BYTES + b"]}"
+    response = api.post(
+        "/v1/ingest",
+        content=body,
+        headers={"content-type": "application/json", "content-length": "1"},
+    )
+    assert response.status_code == 413
+    assert main.record_store.all() == []
