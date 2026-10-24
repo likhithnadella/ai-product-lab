@@ -3,6 +3,7 @@ import os
 from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
+from app.body_limit import DemoBodyLimitMiddleware
 from app.ingestion import InMemoryRecordStore, ingest_batch
 from app.models import BatchIngestionResult, IntakeRecord, ResolutionResult
 from app.resolution import resolve
@@ -12,6 +13,8 @@ app = FastAPI(
     version="0.2.0",
     description="A production-minded foundation for cleansing, resolution, search, and AI-assisted workflows.",
 )
+
+app.add_middleware(DemoBodyLimitMiddleware)
 
 record_store = InMemoryRecordStore()
 
