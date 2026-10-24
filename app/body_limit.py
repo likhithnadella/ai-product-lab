@@ -5,8 +5,6 @@ FastAPI parses JSON or invokes the route. This is a memory bound per request,
 not authentication, concurrency control, or protection from slow clients.
 """
 
-from collections.abc import Awaitable, Callable
-
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
@@ -18,7 +16,7 @@ class DemoBodyLimitMiddleware:
     """Reject oversized demo bodies without processing partial ingestion batches."""
 
     def __init__(self, app: ASGIApp, max_body_bytes: int = _MAX_DEMO_BODY_BYTES) -> None:
-        if max_body_bytes < 1:
+        if isinstance(max_body_bytes, bool) or not isinstance(max_body_bytes, int) or max_body_bytes < 1:
             raise ValueError("max_body_bytes must be positive")
         self.app = app
         self.max_body_bytes = max_body_bytes
