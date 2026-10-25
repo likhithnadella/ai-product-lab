@@ -4,6 +4,7 @@ Only a trusted authentication/authorization layer may construct TenantPrincipal.
 This module is deliberately not wired into the unauthenticated HTTP endpoints.
 """
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from threading import Lock
 from typing import Literal
@@ -55,16 +56,43 @@ class TenantRecordStore:
             raise PermissionError("source access denied")
 
     def upsert(self, principal: TenantPrincipal, record: IntakeRecord) -> UpsertStatus:
-        self._require(principal, record.source, write=True)
-        if not record.source.strip() or not record.external_id or not record.external_id.strip():
-            raise ValueError("nonblank source and external_id are required")
-        key = (principal.tenant_id, record.source, record.external_id)
+        """Classify and write one record using the same checked batch boundary."""
+        return self.upsert_many(principal, [record])[0]
+
+    def upsert_many(
+        self, principal: TenantPrincipal, records: Iterable[IntakeRecord]
+    ) -> list[UpsertStatus]:
+        """Atomically classify and write a trusted tenant's batch in one process.
+
+        Validate all records and source permissions before changing storage.
+        Duplicate keys within a batch are applied in order, under one lock.
+        This does not provide durability, multi-worker transactions, or HTTP auth.
+        """
+        if not isinstance(principal, TenantPrincipal):
+            raise PermissionError("trusted tenant principal required")
+
+        # Materialize and defensively copy before taking the lock, so a bad
+        # item or failed copy cannot leave earlier items partially persisted.
+        prepared: list[IntakeRecord] = []
+        for record in records:
+            if not isinstance(record, IntakeRecord):
+                raise TypeError("batch items must be IntakeRecord instances")
+            self._require(principal, record.source, write=True)
+            if not record.source.strip() or not record.external_id or not record.external_id.strip():
+                raise ValueError("nonblank source and external_id are required")
+            prepared.append(record.model_copy(deep=True))
+
+        statuses: list[UpsertStatus] = []
         with self._lock:
-            existing = self._records.get(key)
-            if existing == record:
-                return "unchanged"
-            self._records[key] = record.model_copy(deep=True)
-            return "created" if existing is None else "updated"
+            for record in prepared:
+                key = (principal.tenant_id, record.source, record.external_id)
+                existing = self._records.get(key)
+                if existing == record:
+                    statuses.append("unchanged")
+                else:
+                    statuses.append("created" if existing is None else "updated")
+                    self._records[key] = record
+        return statuses
 
     def get(
         self, principal: TenantPrincipal, source: str, external_id: str
