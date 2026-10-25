@@ -80,7 +80,7 @@ def test_batch_preflight_denies_mixed_sources_without_partial_write() -> None:
     assert store.search(actor, "Ada") == []
 
 
-@pytest.mark.parametrize("bad_id", ["", " ", "\\t"])
+@pytest.mark.parametrize("bad_id", ["", " ", "\t"])
 def test_batch_invalid_identity_rolls_back_all_items(bad_id: str) -> None:
     store = TenantRecordStore()
     actor = principal("tenant-a", read=("crm",), write=("crm",))
@@ -111,3 +111,41 @@ def test_batch_requires_principal_even_for_empty_input() -> None:
     store = TenantRecordStore()
     with pytest.raises(PermissionError, match="trusted tenant principal"):
         store.upsert_many(None, [])  # type: ignore[arg-type]
+
+
+def test_batch_iterator_failure_cannot_partially_persist() -> None:
+    store = TenantRecordStore()
+    actor = principal("tenant-a", read=("crm",), write=("crm",))
+
+    def broken_stream():
+        yield IntakeRecord(source="crm", external_id="1", first_name="Ada")
+        raise RuntimeError("synthetic upstream read failed")
+
+    with pytest.raises(RuntimeError, match="upstream"):
+        store.upsert_many(actor, broken_stream())
+
+    assert store.get(actor, "crm", "1") is None
+
+
+def test_batch_copies_inputs_before_persisting() -> None:
+    store = TenantRecordStore()
+    actor = principal("tenant-a", read=("crm",), write=("crm",))
+    incoming = IntakeRecord(
+        source="crm", external_id="1", first_name="Ada",
+        attributes={"synthetic": "original"},
+    )
+
+    assert store.upsert_many(actor, [incoming]) == ["created"]
+    incoming.attributes["synthetic"] = "mutated"
+    assert store.get(actor, "crm", "1").attributes["synthetic"] == "original"
+
+
+def test_batch_rejects_non_records_before_any_write() -> None:
+    store = TenantRecordStore()
+    actor = principal("tenant-a", read=("crm",), write=("crm",))
+    first = IntakeRecord(source="crm", external_id="1", first_name="Ada")
+
+    with pytest.raises(TypeError, match="IntakeRecord"):
+        store.upsert_many(actor, [first, None])  # type: ignore[list-item]
+
+    assert store.get(actor, "crm", "1") is None
