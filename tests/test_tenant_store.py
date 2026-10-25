@@ -65,3 +65,49 @@ def test_untrusted_principal_is_rejected() -> None:
         store.search(None, "Ada")  # type: ignore[arg-type]
     with pytest.raises(PermissionError):
         store.get(None, "crm", "1")  # type: ignore[arg-type]
+
+
+def test_batch_preflight_denies_mixed_sources_without_partial_write() -> None:
+    store = TenantRecordStore()
+    actor = principal("tenant-a", read=("crm",), write=("crm",))
+    allowed = IntakeRecord(source="crm", external_id="1", first_name="Ada")
+    forbidden = IntakeRecord(source="payroll", external_id="2", first_name="Grace")
+
+    with pytest.raises(PermissionError, match="source access denied"):
+        store.upsert_many(actor, [allowed, forbidden])
+
+    assert store.get(actor, "crm", "1") is None
+    assert store.search(actor, "Ada") == []
+
+
+@pytest.mark.parametrize("bad_id", ["", " ", "\\t"])
+def test_batch_invalid_identity_rolls_back_all_items(bad_id: str) -> None:
+    store = TenantRecordStore()
+    actor = principal("tenant-a", read=("crm",), write=("crm",))
+    valid = IntakeRecord(source="crm", external_id="1", first_name="Ada")
+    invalid = IntakeRecord(source="crm", external_id=bad_id, first_name="Grace")
+
+    with pytest.raises(ValueError, match="nonblank"):
+        store.upsert_many(actor, [valid, invalid])
+
+    assert store.get(actor, "crm", "1") is None
+
+
+def test_batch_duplicate_keys_replay_in_order() -> None:
+    store = TenantRecordStore()
+    actor = principal("tenant-a", read=("crm",), write=("crm",))
+    first = IntakeRecord(source="crm", external_id="1", first_name="Ada")
+    newer = IntakeRecord(source="crm", external_id="1", first_name="Grace")
+
+    assert store.upsert_many(actor, [first, first, newer, newer]) == [
+        "created", "unchanged", "updated", "unchanged"
+    ]
+    assert store.get(actor, "crm", "1").first_name == "Grace"
+    assert store.upsert_many(actor, [newer]) == ["unchanged"]
+    assert store.upsert_many(actor, []) == []
+
+
+def test_batch_requires_principal_even_for_empty_input() -> None:
+    store = TenantRecordStore()
+    with pytest.raises(PermissionError, match="trusted tenant principal"):
+        store.upsert_many(None, [])  # type: ignore[arg-type]
