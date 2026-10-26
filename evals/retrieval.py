@@ -39,6 +39,16 @@ def evaluate_retrieval(
             raise ValueError("relevance judgments reference unknown record identities")
         hits = search_records(records, case.query, allowed_sources=case.allowed_sources, limit=k)
         found = [(hit.record.source, hit.record.external_id) for hit in hits]
+        # The evaluator must not silently award quality credit to a retrieval
+        # implementation that violates scope, identity, or page-size contracts.
+        if len(found) > k:
+            raise ValueError("retrieval returned more than k hits")
+        if any(source not in case.allowed_sources for source, _ in found):
+            raise ValueError("retrieval returned out-of-scope record")
+        if any(key not in available_keys for key in found):
+            raise ValueError("retrieval returned unknown record identity")
+        if len(found) != len(set(found)):
+            raise ValueError("retrieval returned duplicate record identities")
         if not found:
             zero_results += 1
         if not case.relevant_keys:
