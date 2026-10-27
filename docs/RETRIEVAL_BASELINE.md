@@ -14,8 +14,8 @@ This implementation is O(records × query terms) and does not support stemming, 
 ## Reproducible judged-query regression
 
 Run `python -m evals.judged_fixtures` from the repository root. The versioned
-`evals/judged_fixtures.py` dataset contains **10 synthetic cases**, including
-7 positive judgments and 3 negative cases. Keep the fixture version, query
+`evals/judged_fixtures.py` dataset contains **19 synthetic cases**, including
+14 positive judgments and 5 negative cases. Keep the fixture version, query
 scopes, and hand-judged relevant identities stable when comparing changes;
 review and version intentional edits to the benchmark.
 
@@ -48,3 +48,32 @@ authorization, or prove that the lexical baseline generalizes to customer data.
 Do not enable public retrieval based on these tests. Review issue #8 before
 exposing any search API, and expand issue #9's synthetic judgment coverage
 before using metric changes to justify embeddings or a ranking migration.
+
+
+## Query-level failure diagnostics (fixture v2026-10-27.1)
+
+Run `python -m evals.judged_fixtures --details --k 5` to print the aggregate
+metrics and each hand-judged query's permitted sources, expected identities,
+retrieved identities in rank order, missed identities, unexpected identities,
+and first relevant rank. Use `--k 3` to compare a different cutoff; the
+aggregate-only command remains backward compatible. JSON output is stable
+enough for local inspection, but it is not a versioned public API.
+
+The expanded synthetic set adds sparse records, company-only queries, phone
+suffix lookups, ambiguous names across sources, and scoped phone negatives.
+It intentionally includes `Grace Hoper` with an expected `Grace Hopper`
+identity. The current exact-token lexical baseline misses this typo; keeping
+that failure visible is more informative than reporting perfect recall on an
+easy fixture. At K=5, the hand-counted expectation is **13/14 positive queries
+with a relevant result**, **16/70 macro Precision@5**, **6/19 zero-result
+queries**, and **0/5 negative queries with a false positive**. CI tests
+recalculate these values; the numbers are regression evidence on this fixture
+only, not claims about users, customers, or search relevance in production.
+
+Diagnostics use the same validation pass as aggregate scoring: an out-of-scope,
+unknown, duplicate, or over-limit hit raises rather than publishing misleading
+metrics. Query text and identities may contain sensitive data in real systems:
+run this CLI **only on synthetic or explicitly approved sanitized evaluation
+corpora**, and do not publish raw customer queries, names, or retrieved records
+in CI artifacts, Slack, or logs. These diagnostics do not add runtime
+authentication, tenant authorization, persistence, or performance guarantees.
