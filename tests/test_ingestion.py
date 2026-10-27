@@ -1,6 +1,8 @@
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
 
+import pytest
+
 from app.ingestion import InMemoryRecordStore, ingest_batch
 from app.models import IntakeRecord
 
@@ -117,3 +119,76 @@ def test_concurrent_distinct_source_keys_do_not_collide() -> None:
 
     assert statuses == ["created"] * participants
     assert len(store.all()) == participants
+
+
+@pytest.mark.parametrize("identifier", ["", " ", "\t", "  \n  "])
+def test_blank_external_identity_is_rejected(identifier: str) -> None:
+    store = InMemoryRecordStore()
+    outcome = ingest_batch([record(identifier)], store)
+    assert outcome.rejected == 1
+    assert outcome.items[0].reason == "external_id_required_for_idempotency"
+    assert store.all() == []
+    with pytest.raises(ValueError):
+        store.put(record(identifier))
+    with pytest.raises(ValueError):
+        store.upsert(record(identifier))
+
+
+def test_valid_external_ids_remain_opaque_and_replayable() -> None:
+    store = InMemoryRecordStore()
+    for identifier in (" row-1 ", "row-1", "a\\tb"):
+        assert ingest_batch([record(identifier)], store).created == 1
+        assert ingest_batch([record(identifier)], store).unchanged == 1
+        assert store.get("csv_import", identifier).external_id == identifier
+    assert len(store.all()) == 3
+
+
+@pytest.mark.parametrize("source", ["", "   ", "\t"])
+def test_blank_source_is_rejected_after_external_id_fix(source: str) -> None:
+    store = InMemoryRecordStore()
+    result = ingest_batch([record("valid-id", source=source), record("valid-id")], store)
+    assert [item.status for item in result.items] == ["rejected", "created"]
+    assert result.items[0].reason == "source_required"
+    with pytest.raises(ValueError, match="source is required"):
+        store.put(record("valid-id", source=source))
+    with pytest.raises(ValueError, match="source is required"):
+        store.upsert(record("valid-id", source=source))
+    assert len(store.all()) == 1
+
+
+@pytest.mark.parametrize("source", ["", "   ", "\t"])
+def test_blank_source_is_rejected_without_writing(source: str) -> None:
+    store = InMemoryRecordStore()
+
+    result = ingest_batch([record("row-1", source=source)], store)
+
+    assert result.rejected == 1
+    assert result.created == 0
+    assert result.items[0].reason == "source_required"
+    assert result.items[0].external_id == "row-1"
+    assert store.all() == []
+
+
+def test_blank_source_does_not_block_valid_records_in_same_batch() -> None:
+    store = InMemoryRecordStore()
+    batch = [record("row-1", source=" "), record("row-2")]
+
+    result = ingest_batch(batch, store)
+
+    assert result.rejected == 1
+    assert result.created == 1
+    assert [item.status for item in result.items] == ["rejected", "created"]
+    assert [item.source for item in store.all()] == ["csv_import"]
+
+
+@pytest.mark.parametrize("source", ["", "   "])
+def test_store_put_and_upsert_reject_blank_source(source: str) -> None:
+    store = InMemoryRecordStore()
+    blank = record("row-1", source=source)
+
+    with pytest.raises(ValueError, match="source is required"):
+        store.put(blank)
+    with pytest.raises(ValueError, match="source is required"):
+        store.upsert(blank)
+
+    assert store.all() == []

@@ -48,6 +48,10 @@ def resolve(
     review_threshold: float = 0.65,
     ambiguity_margin: float = 0.05,
 ) -> ResolutionResult:
+    if not 0 <= review_threshold <= auto_match_threshold <= 1:
+        raise ValueError("thresholds must satisfy 0 <= review <= auto_match <= 1")
+    if not 0 <= ambiguity_margin <= 1:
+        raise ValueError("ambiguity_margin must be between 0 and 1")
     if not candidates:
         return ResolutionResult(decision="new_record", confidence=1.0)
 
@@ -61,8 +65,12 @@ def resolve(
         else:
             anonymous.append(candidate)
 
+    # Stable source/identity ordering makes ambiguous review choices reproducible.
+    # Anonymous candidates have no durable identity; preserve their input order.
+    named = sorted(unique.items(), key=lambda pair: pair[0])
+    ordered = [record for _, record in named] + anonymous
     ranked = sorted(
-        (score_candidate(incoming, candidate) for candidate in [*unique.values(), *anonymous]),
+        (score_candidate(incoming, candidate) for candidate in ordered),
         key=lambda item: item.score,
         reverse=True,
     )

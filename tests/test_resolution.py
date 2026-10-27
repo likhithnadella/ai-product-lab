@@ -1,3 +1,5 @@
+import pytest
+
 from app.models import IntakeRecord
 from app.resolution import resolve, score_candidate
 
@@ -90,3 +92,29 @@ def test_duplicate_source_identity_does_not_create_false_ambiguity():
     candidate = IntakeRecord(source="crm", external_id="a", email="same@example.com", phone="2145550100")
     result = resolve(incoming, [candidate, candidate])
     assert result.decision == "matched"
+
+
+def test_tied_review_candidate_is_stable_under_reordering():
+    incoming = IntakeRecord(source="csv", email="same@example.com", phone="2145550100")
+    first = IntakeRecord(source="crm", external_id="b", email="same@example.com", phone="2145550100")
+    second = IntakeRecord(source="crm", external_id="a", email="same@example.com", phone="2145550100")
+    forward = resolve(incoming, [first, second])
+    reversed_result = resolve(incoming, [second, first])
+    assert forward.decision == reversed_result.decision == "review"
+    assert forward.candidate.record_id == reversed_result.candidate.record_id == "a"
+
+
+@pytest.mark.parametrize(
+    "settings",
+    [
+        {"review_threshold": -0.1},
+        {"auto_match_threshold": 1.1},
+        {"review_threshold": 0.9, "auto_match_threshold": 0.8},
+        {"ambiguity_margin": -0.01},
+        {"ambiguity_margin": 1.01},
+    ],
+)
+def test_invalid_threshold_configuration_fails_even_without_candidates(settings: dict) -> None:
+    incoming = IntakeRecord(source="crm")
+    with pytest.raises(ValueError):
+        resolve(incoming, [], **settings)

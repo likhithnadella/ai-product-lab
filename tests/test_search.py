@@ -87,6 +87,8 @@ def test_no_cases_returns_defined_zero_metrics() -> None:
         "precision_at_k": 0.0,
         "mrr_at_k": 0.0,
         "zero_result_rate": 0.0,
+        "negative_cases": 0,
+        "false_positive_rate_on_negatives": 0.0,
     }
 
 
