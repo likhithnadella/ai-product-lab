@@ -6,7 +6,11 @@ import pytest
 
 from app.search import search_records
 from evals.judged_fixtures import (
-    CASES, FIXTURE_VERSION, RECORDS, judged_detailed_report, judged_report,
+    CASES,
+    FIXTURE_VERSION,
+    RECORDS,
+    judged_detailed_report,
+    judged_report,
 )
 
 
