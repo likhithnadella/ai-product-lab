@@ -5,6 +5,8 @@ FastAPI parses JSON or invokes the route. This is a memory bound per request,
 not authentication, concurrency control, or protection from slow clients.
 """
 
+import os
+
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
@@ -22,8 +24,20 @@ class DemoBodyLimitMiddleware:
         self.max_body_bytes = max_body_bytes
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http" or scope.get("path") not in _DEMO_PATHS:
+        if (
+            scope["type"] != "http"
+            or scope.get("path") not in _DEMO_PATHS
+            or scope.get("method") != "POST"
+        ):
             await self.app(scope, receive, send)
+            return
+
+        # Reject disabled demo routes before consuming even one request-body
+        # frame. FastAPI dependency checks occur after request parsing.
+        if os.environ.get("AI_PRODUCT_LAB_ENABLE_UNAUTHENTICATED_DEMO") != "1":
+            await JSONResponse(
+                {"detail": "Unauthenticated demo API is disabled"}, status_code=503
+            )(scope, receive, send)
             return
 
         lengths = [
