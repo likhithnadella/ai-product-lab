@@ -129,9 +129,9 @@ The generated API documentation is available at `http://127.0.0.1:8000/docs`.
 AI_PRODUCT_LAB_ENABLE_UNAUTHENTICATED_DEMO=1 uvicorn app.main:app --host 127.0.0.1 --reload
 ```
 
-This flag is **not authentication** and does not verify the server's network exposure. Never enable it for a public, shared, proxied, or untrusted deployment; use only synthetic records. Both demo endpoints validate a maximum of 1,000 records/candidates per request (HTTP 422 above the limit). The API also rejects request bodies larger than **1 MiB (1,048,576 bytes)** with HTTP 413. The ASGI guard checks both declared Content-Length and the actual streamed bytes *before* JSON parsing or ingestion, so a chunked request cannot bypass the cap by omitting or understating its length. Malformed Content-Length is rejected with HTTP 400. These controls are deliberately separate: 1,000 items bounds per-batch work while 1 MiB bounds raw request bytes. Both limits apply to the two demo POST routes only.
+This flag is **not authentication** and does not verify the server's network exposure. Never enable it for a public, shared, proxied, or untrusted deployment; use only synthetic records. Both demo endpoints validate a maximum of 1,000 records/candidates per request (HTTP 422 above the limit). The API also rejects request bodies larger than **1 MiB (1,048,576 bytes)** with HTTP 413. The ASGI guard checks both declared Content-Length and the actual streamed bytes *before* JSON parsing or ingestion, so a chunked request cannot bypass the cap by omitting or understating its length. Malformed Content-Length is rejected with HTTP 400. These controls are deliberately separate: 1,000 items bounds per-batch work while 1 MiB bounds raw request bytes. Both limits apply to the two demo POST routes only. When the demo flag is unset or not exactly `1`, those POST routes return HTTP 503 **before reading any request-body bytes**; this avoids buffering an unauthorized or disabled request. Other methods retain normal framework routing (for example, GET returns 405).
 
-**Limits and tradeoffs:** the guard buffers up to 1 MiB per concurrent request in process memory. It does not impose concurrency, rate, wall-clock, or upstream proxy limits, authenticate callers, or make the service safe on exposed networks. For deployment, use authenticated endpoints, network controls, request timeouts and measured load limits. Regression tests exercise declared, streamed, malformed, underreported, and exact-boundary bodies using synthetic data (`pytest -q tests/test_api_body_limits.py`).
+**Limits and tradeoffs:** the guard buffers up to 1 MiB per concurrent request in process memory. It does not impose concurrency, rate, wall-clock, or upstream proxy limits, authenticate callers, or make the service safe on exposed networks. For deployment, use authenticated endpoints, network controls, request timeouts and measured load limits. Regression tests exercise fail-fast disabled routes, declared, streamed, malformed, underreported, and exact-boundary bodies using synthetic data (`pytest -q tests/test_api_body_limits.py`).
 
 Run the same basic quality gates used by CI:
 
@@ -144,7 +144,8 @@ pytest -q
 
 ```text
 app/
-  main.py          API boundary\n  body_limit.py    raw HTTP demo body guard (1 MiB)
+  main.py          API boundary
+  body_limit.py    raw HTTP demo body guard (1 MiB)
   models.py        canonical request/response contracts
   ingestion.py     replay-safe ingestion semantics
   resolution.py    explainable entity matching and ambiguity routing
