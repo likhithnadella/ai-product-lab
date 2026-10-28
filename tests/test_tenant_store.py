@@ -149,3 +149,51 @@ def test_batch_rejects_non_records_before_any_write() -> None:
         store.upsert_many(actor, [first, None])  # type: ignore[list-item]
 
     assert store.get(actor, "crm", "1") is None
+
+
+def test_batch_accepts_exactly_one_thousand_records() -> None:
+    store = TenantRecordStore()
+    actor = principal("tenant-a", read=("crm",), write=("crm",))
+    records = [
+        IntakeRecord(source="crm", external_id=f"synthetic-{i}")
+        for i in range(1000)
+    ]
+
+    assert store.upsert_many(actor, records) == ["created"] * 1000
+    assert len(store.search(actor, "synthetic")) == 0
+    assert store.get(actor, "crm", "synthetic-999") is not None
+
+
+def test_oversized_batch_preserves_existing_state_and_rejects_all_new_records() -> None:
+    store = TenantRecordStore()
+    actor = principal("tenant-a", read=("crm",), write=("crm",))
+    original = IntakeRecord(source="crm", external_id="existing", first_name="Ada")
+    assert store.upsert(actor, original) == "created"
+    records = [
+        IntakeRecord(source="crm", external_id=f"synthetic-{i}")
+        for i in range(1001)
+    ]
+    records[0] = IntakeRecord(source="crm", external_id="existing", first_name="Grace")
+
+    with pytest.raises(ValueError, match="batch exceeds 1000 records"):
+        store.upsert_many(actor, records)
+
+    assert store.get(actor, "crm", "existing").first_name == "Ada"
+    assert store.get(actor, "crm", "synthetic-1") is None
+
+
+def test_batch_cap_stops_unbounded_iterator_without_partial_write() -> None:
+    store = TenantRecordStore()
+    actor = principal("tenant-a", read=("crm",), write=("crm",))
+    consumed = []
+
+    def synthetic_stream():
+        for i in range(10000):
+            consumed.append(i)
+            yield IntakeRecord(source="crm", external_id=f"synthetic-{i}")
+
+    with pytest.raises(ValueError, match="batch exceeds 1000 records"):
+        store.upsert_many(actor, synthetic_stream())
+
+    assert len(consumed) == 1001
+    assert store.get(actor, "crm", "synthetic-0") is None
