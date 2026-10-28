@@ -85,3 +85,45 @@ def test_underreported_content_length_cannot_bypass_actual_byte_limit(
     )
     assert response.status_code == 413
     assert main.record_store.all() == []
+
+
+@pytest.mark.parametrize("path", ["/v1/ingest", "/v1/resolve"])
+@pytest.mark.parametrize("flag", [None, "0", "true", "1 "])
+def test_disabled_demo_rejects_before_reading_body(
+    monkeypatch: pytest.MonkeyPatch, path: str, flag: str | None
+) -> None:
+    import asyncio
+
+    from app.body_limit import DemoBodyLimitMiddleware
+
+    if flag is None:
+        monkeypatch.delenv("AI_PRODUCT_LAB_ENABLE_UNAUTHENTICATED_DEMO", raising=False)
+    else:
+        monkeypatch.setenv("AI_PRODUCT_LAB_ENABLE_UNAUTHENTICATED_DEMO", flag)
+
+    async def downstream(scope, receive, send):
+        raise AssertionError("disabled endpoint must not invoke downstream app")
+
+    async def unread_body():
+        raise AssertionError("disabled endpoint must not read request body")
+
+    messages = []
+
+    async def capture(message):
+        messages.append(message)
+
+    middleware = DemoBodyLimitMiddleware(downstream)
+    scope = {"type": "http", "method": "POST", "path": path, "headers": []}
+    asyncio.run(middleware(scope, unread_body, capture))
+
+    assert messages[0]["type"] == "http.response.start"
+    assert messages[0]["status"] == 503
+    assert b"disabled" in messages[1]["body"]
+
+
+def test_non_post_demo_path_is_not_intercepted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("AI_PRODUCT_LAB_ENABLE_UNAUTHENTICATED_DEMO", raising=False)
+    client = TestClient(main.app)
+    assert client.get("/v1/ingest").status_code == 405
