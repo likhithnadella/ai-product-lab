@@ -13,6 +13,7 @@ from app.models import IntakeRecord
 from app.search import SearchHit, search_records
 
 UpsertStatus = Literal["created", "updated", "unchanged"]
+_MAX_BATCH_RECORDS = 1000
 
 
 @dataclass(frozen=True)
@@ -65,6 +66,7 @@ class TenantRecordStore:
         """Atomically classify and write a trusted tenant's batch in one process.
 
         Validate all records and source permissions before changing storage.
+        At most 1,000 records are accepted; excess items fail before any write.
         Duplicate keys within a batch are applied in order, under one lock.
         This does not provide durability, multi-worker transactions, or HTTP auth.
         """
@@ -74,7 +76,9 @@ class TenantRecordStore:
         # Materialize and defensively copy before taking the lock, so a bad
         # item or failed copy cannot leave earlier items partially persisted.
         prepared: list[IntakeRecord] = []
-        for record in records:
+        for index, record in enumerate(records):
+            if index >= _MAX_BATCH_RECORDS:
+                raise ValueError(f"batch exceeds {_MAX_BATCH_RECORDS} records")
             if not isinstance(record, IntakeRecord):
                 raise TypeError("batch items must be IntakeRecord instances")
             self._require(principal, record.source, write=True)
