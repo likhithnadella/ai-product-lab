@@ -1,11 +1,13 @@
 """HTTP body-byte limit regressions for the explicitly opt-in local demo."""
 
+import asyncio
 import json
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app import main
+from app.body_limit import DemoBodyLimitMiddleware
 
 MAX_BODY_BYTES = 1024 * 1024
 
@@ -92,10 +94,6 @@ def test_underreported_content_length_cannot_bypass_actual_byte_limit(
 def test_disabled_demo_rejects_before_reading_body(
     monkeypatch: pytest.MonkeyPatch, path: str, flag: str | None
 ) -> None:
-    import asyncio
-
-    from app.body_limit import DemoBodyLimitMiddleware
-
     if flag is None:
         monkeypatch.delenv("AI_PRODUCT_LAB_ENABLE_UNAUTHENTICATED_DEMO", raising=False)
     else:
