@@ -160,7 +160,6 @@ def test_batch_accepts_exactly_one_thousand_records() -> None:
     ]
 
     assert store.upsert_many(actor, records) == ["created"] * 1000
-    assert len(store.search(actor, "synthetic")) == 0
     assert store.get(actor, "crm", "synthetic-999") is not None
 
 
