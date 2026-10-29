@@ -196,3 +196,29 @@ def test_batch_cap_stops_unbounded_iterator_without_partial_write() -> None:
 
     assert len(consumed) == 1001
     assert store.get(actor, "crm", "synthetic-0") is None
+
+
+class _SourceSwappingOnCopy(IntakeRecord):
+    """Synthetic adversarial caller mutation during the snapshot boundary."""
+
+    def model_copy(self, *, update=None, deep=False):
+        self.source = "payroll"
+        return super().model_copy(update=update, deep=deep)
+
+
+def test_batch_authorizes_the_copied_record_not_a_mutable_original() -> None:
+    store = TenantRecordStore()
+    actor = principal("tenant-a", read=("crm",), write=("crm",))
+    payroll_reader = principal("tenant-a", read=("payroll",))
+    allowed = IntakeRecord(source="crm", external_id="safe", first_name="Ada")
+    swapped = _SourceSwappingOnCopy(
+        source="crm", external_id="injected", first_name="Grace"
+    )
+
+    # A source field changed by a caller while copying must never bypass the
+    # write permission decision or partially persist the preceding item.
+    with pytest.raises(PermissionError, match="source access denied"):
+        store.upsert_many(actor, [allowed, swapped])
+
+    assert store.get(actor, "crm", "safe") is None
+    assert store.get(payroll_reader, "payroll", "injected") is None
