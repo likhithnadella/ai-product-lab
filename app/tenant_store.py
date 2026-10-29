@@ -107,10 +107,13 @@ class TenantRecordStore:
             for record in prepared:
                 key = (principal.tenant_id, record.source, record.external_id)
                 existing = staged.get(key)
-                if existing == record:
+                if existing is None:
+                    statuses.append("created")
+                    staged[key] = record
+                elif existing == record:
                     statuses.append("unchanged")
                 else:
-                    statuses.append("created" if existing is None else "updated")
+                    statuses.append("updated")
                     staged[key] = record
             self._records = staged
         return statuses
