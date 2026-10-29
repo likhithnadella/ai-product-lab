@@ -94,16 +94,25 @@ class TenantRecordStore:
                 raise ValueError("nonblank source and external_id are required")
             prepared.append(snapshot)
 
+        if not prepared:
+            return []
+
         statuses: list[UpsertStatus] = []
         with self._lock:
+            # Stage the complete next state privately. A late equality or
+            # allocation failure must not leave earlier records committed.
+            # The pointer swap publishes the whole batch under one lock.
+            # This costs O(total stored records) references per nonempty batch.
+            staged = self._records.copy()
             for record in prepared:
                 key = (principal.tenant_id, record.source, record.external_id)
-                existing = self._records.get(key)
+                existing = staged.get(key)
                 if existing == record:
                     statuses.append("unchanged")
                 else:
                     statuses.append("created" if existing is None else "updated")
-                    self._records[key] = record
+                    staged[key] = record
+            self._records = staged
         return statuses
 
     def get(
