@@ -81,10 +81,18 @@ class TenantRecordStore:
                 raise ValueError(f"batch exceeds {_MAX_BATCH_RECORDS} records")
             if not isinstance(record, IntakeRecord):
                 raise TypeError("batch items must be IntakeRecord instances")
-            self._require(principal, record.source, write=True)
-            if not record.source.strip() or not record.external_id or not record.external_id.strip():
+            # Snapshot before checking permissions and identity. A caller can
+            # mutate a Pydantic model during copying; checking the original
+            # first could authorize one source and persist another.
+            snapshot = record.model_copy(deep=True)
+            if not isinstance(snapshot, IntakeRecord) or snapshot is record:
+                raise TypeError("batch copy must be an independent IntakeRecord")
+            if not isinstance(snapshot.source, str) or not snapshot.source.strip():
                 raise ValueError("nonblank source and external_id are required")
-            prepared.append(record.model_copy(deep=True))
+            self._require(principal, snapshot.source, write=True)
+            if not isinstance(snapshot.external_id, str) or not snapshot.external_id.strip():
+                raise ValueError("nonblank source and external_id are required")
+            prepared.append(snapshot)
 
         statuses: list[UpsertStatus] = []
         with self._lock:
