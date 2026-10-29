@@ -4,6 +4,7 @@ Only a trusted authentication/authorization layer may construct TenantPrincipal.
 This module is deliberately not wired into the unauthenticated HTTP endpoints.
 """
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from threading import Lock
 from typing import Literal
@@ -12,6 +13,7 @@ from app.models import IntakeRecord
 from app.search import SearchHit, search_records
 
 UpsertStatus = Literal["created", "updated", "unchanged"]
+_MAX_BATCH_RECORDS = 1000
 
 
 @dataclass(frozen=True)
@@ -55,16 +57,66 @@ class TenantRecordStore:
             raise PermissionError("source access denied")
 
     def upsert(self, principal: TenantPrincipal, record: IntakeRecord) -> UpsertStatus:
-        self._require(principal, record.source, write=True)
-        if not record.source.strip() or not record.external_id or not record.external_id.strip():
-            raise ValueError("nonblank source and external_id are required")
-        key = (principal.tenant_id, record.source, record.external_id)
+        """Classify and write one record using the same checked batch boundary."""
+        return self.upsert_many(principal, [record])[0]
+
+    def upsert_many(
+        self, principal: TenantPrincipal, records: Iterable[IntakeRecord]
+    ) -> list[UpsertStatus]:
+        """Atomically classify and write a trusted tenant's batch in one process.
+
+        Validate all records and source permissions before changing storage.
+        At most 1,000 records are accepted; excess items fail before any write.
+        Duplicate keys within a batch are applied in order, under one lock.
+        This does not provide durability, multi-worker transactions, or HTTP auth.
+        """
+        if not isinstance(principal, TenantPrincipal):
+            raise PermissionError("trusted tenant principal required")
+
+        # Materialize and defensively copy before taking the lock, so a bad
+        # item or failed copy cannot leave earlier items partially persisted.
+        prepared: list[IntakeRecord] = []
+        for index, record in enumerate(records):
+            if index >= _MAX_BATCH_RECORDS:
+                raise ValueError(f"batch exceeds {_MAX_BATCH_RECORDS} records")
+            if not isinstance(record, IntakeRecord):
+                raise TypeError("batch items must be IntakeRecord instances")
+            # Snapshot before checking permissions and identity. A caller can
+            # mutate a Pydantic model during copying; checking the original
+            # first could authorize one source and persist another.
+            snapshot = record.model_copy(deep=True)
+            if not isinstance(snapshot, IntakeRecord) or snapshot is record:
+                raise TypeError("batch copy must be an independent IntakeRecord")
+            if not isinstance(snapshot.source, str) or not snapshot.source.strip():
+                raise ValueError("nonblank source and external_id are required")
+            self._require(principal, snapshot.source, write=True)
+            if not isinstance(snapshot.external_id, str) or not snapshot.external_id.strip():
+                raise ValueError("nonblank source and external_id are required")
+            prepared.append(snapshot)
+
+        if not prepared:
+            return []
+
+        statuses: list[UpsertStatus] = []
         with self._lock:
-            existing = self._records.get(key)
-            if existing == record:
-                return "unchanged"
-            self._records[key] = record.model_copy(deep=True)
-            return "created" if existing is None else "updated"
+            # Stage the complete next state privately. A late equality or
+            # allocation failure must not leave earlier records committed.
+            # The pointer swap publishes the whole batch under one lock.
+            # This costs O(total stored records) references per nonempty batch.
+            staged = self._records.copy()
+            for record in prepared:
+                key = (principal.tenant_id, record.source, record.external_id)
+                existing = staged.get(key)
+                if existing is None:
+                    statuses.append("created")
+                    staged[key] = record
+                elif existing == record:
+                    statuses.append("unchanged")
+                else:
+                    statuses.append("updated")
+                    staged[key] = record
+            self._records = staged
+        return statuses
 
     def get(
         self, principal: TenantPrincipal, source: str, external_id: str
