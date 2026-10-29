@@ -222,3 +222,32 @@ def test_batch_authorizes_the_copied_record_not_a_mutable_original() -> None:
 
     assert store.get(actor, "crm", "safe") is None
     assert store.get(payroll_reader, "payroll", "injected") is None
+
+
+class _ExplodingEqualityRecord(IntakeRecord):
+    """Synthetic fault injected during commit-time replay classification."""
+
+    def __eq__(self, other: object) -> bool:
+        raise RuntimeError("synthetic comparison failure")
+
+
+def test_batch_commit_exception_preserves_entire_previous_state() -> None:
+    store = TenantRecordStore()
+    actor = principal("tenant-a", read=("crm",), write=("crm",))
+    existing = _ExplodingEqualityRecord(
+        source="crm", external_id="existing", first_name="Original"
+    )
+    assert store.upsert(actor, existing) == "created"
+
+    with pytest.raises(RuntimeError, match="synthetic comparison failure"):
+        store.upsert_many(
+            actor,
+            [
+                IntakeRecord(source="crm", external_id="new", first_name="First"),
+                IntakeRecord(source="crm", external_id="existing", first_name="Changed"),
+            ],
+        )
+
+    # A later classification exception must not leave an earlier item written.
+    assert store.get(actor, "crm", "new") is None
+    assert store.get(actor, "crm", "existing").first_name == "Original"
