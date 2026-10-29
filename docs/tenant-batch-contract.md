@@ -22,13 +22,17 @@ writable by the principal. Missing permission raises `PermissionError`.
 1. Consume at most **1,001** iterable items, rejecting any batch larger
    than **1,000 records** before modifying storage. The 1,001st item is
    inspected only to detect overflow; it is never copied or persisted.
-   Validate each accepted item and its source permission. Invalid items,
-   overflow, iterator exceptions, or defensive-copy failures leave the
-   entire batch unapplied.
-2. Deep-copy inputs before taking the process-local lock.
-3. Under one lock, classify each item in input order as `created`,
-   `updated`, or `unchanged`. Repeated keys within the batch observe
-   earlier writes in that batch.
+2. Deep-copy each accepted item **before** checking its identity and source
+   permission. Authorization is evaluated against the same immutable-to-the-
+   caller snapshot that will be stored; a caller changing the original while
+   it is copied cannot switch the persisted source after authorization.
+   Invalid items, denied sources, overflow, iterator errors, or copy failures
+   leave the batch unapplied.
+3. Under one lock, stage the next dictionary state privately. Classify items
+   in input order as `created`, `updated`, or `unchanged`; repeated keys
+   observe earlier staged writes. Publish the entire staged state in one
+   assignment only after all classifications succeed. Even a late comparison
+   exception cannot leave earlier batch items partially committed.
 4. Return statuses in input order. Empty batches return `[]` but still
    require a trusted principal.
 
@@ -56,6 +60,11 @@ assert result == ["created"]
   no durable transaction, cross-worker coordination, rollback after process
   failure, or persistent audit trail. Use a database unique constraint and
   transaction when implementing durable storage.
+- Every nonempty batch stages a shallow copy of the **entire existing
+  record index** before publication, costing O(total stored records) extra
+  dictionary entries and work per batch. Input record snapshots are still
+  deep copies. This deliberate process-local correctness tradeoff is not
+  suitable for high-volume persistence; use database transactions instead.
 - The iterable is copied in memory up to a hard limit of **1,000 records**.
   Overflow raises `ValueError` and preserves existing state; generators are
   stopped after the 1,001st yield. This bounds record count, **not bytes**:
@@ -73,5 +82,6 @@ assert result == ["created"]
 `pytest tests/test_tenant_store.py` covers cross-tenant isolation, denied
 source access, preflight rejection without partial writes, duplicate-key
 ordering, iterator failure, 1,000-item acceptance and overflow rejection, bounded
-iterator consumption, and input/output copy boundaries. Full CI must
+iterator consumption, snapshot-before-authorization, late-failure rollback, and
+input/output copy boundaries. Full CI must
 also pass; an independent review is required before merging.
