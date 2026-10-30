@@ -8,8 +8,8 @@ synthetic: it is a regression set, not evidence of real-world search quality.
 from dataclasses import asdict
 
 from app.models import IntakeRecord
-from evals.retrieval import RetrievalCase, evaluate_retrieval, evaluate_retrieval_detailed
 from evals.quality_gate import gate_evidence
+from evals.retrieval import RetrievalCase, evaluate_retrieval, evaluate_retrieval_detailed
 
 FIXTURE_VERSION = "2026-10-27.1"
 
