@@ -22,6 +22,8 @@ An internal lexical baseline and a small versioned synthetic judged-query fixtur
 
 **Evidence:** Recall@K, Precision@K, MRR/NDCG where appropriate, zero-result rate, false-positive rate on negative queries, p50/p95 latency, and cost. Reproduce the current synthetic baseline with `python -m evals.judged_fixtures`; its results are regression signals, not production performance claims. Authorization filters must survive every retrieval path. The current caller-supplied source scope is not tenant authorization; do not expose search publicly until that boundary exists.
 
+**Current CI regression gate (synthetic only):** `python -m evals.judged_fixtures --gate` verifies the reviewed fixture version `2026-10-27.1` at cutoff K=5, at least 14 positive and 5 negative judgments, Recall@5 and MRR@5 >= 0.90, Precision@5 >= 0.20, and zero false positives on negative cases. It rejects missing, malformed, nonfinite, or inconsistent metric evidence and exits nonzero on a failure. Use `--details` to inspect individual synthetic misses; the default CLI output remains unchanged without `--gate`. The reviewed baseline measures 13/14 Recall@5 and MRR@5 and 16/70 Precision@5, not real-world performance. Thresholds are intentionally below that baseline to detect gross regressions; they are not a service-level objective. Changing fixture version, K, or thresholds requires an explicit reviewed rebaseline. This small fixture can still overfit, and the gate cannot prove retrieval security or generalization.
+
 ## 3. Can a model answer without inventing context?
 
 Add a provider boundary and structured model outputs after retrieval has a benchmark.
