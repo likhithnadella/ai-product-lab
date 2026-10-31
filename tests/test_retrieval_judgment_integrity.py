@@ -33,9 +33,12 @@ def test_blank_queries_cannot_be_counted_as_negative_judgments(query: str) -> No
         evaluate_retrieval(RECORDS, [case(query, keys=frozenset())])
 
 
-def test_empty_permission_scope_cannot_be_counted_as_negative_judgment() -> None:
-    with pytest.raises(ValueError, match="nonempty"):
-        evaluate_retrieval(RECORDS, [case(scope=frozenset(), keys=frozenset())])
+def test_empty_permission_scope_is_valid_security_negative() -> None:
+    # No access must yield no hits, and remains a useful authorization regression.
+    report = evaluate_retrieval(RECORDS, [case(scope=frozenset(), keys=frozenset())])
+    assert report["negative_cases"] == 1
+    assert report["zero_result_rate"] == 1.0
+    assert report["false_positive_rate_on_negatives"] == 0.0
 
 
 @pytest.mark.parametrize("source", ["", "  ", " crm "])
