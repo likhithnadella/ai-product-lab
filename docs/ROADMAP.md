@@ -26,7 +26,7 @@ An internal lexical baseline and a small versioned synthetic judged-query fixtur
 
 ### Judgment integrity and scope diagnostics
 
-The fixture evaluator now rejects duplicate normalized query + permission-scope judgments, blank queries, empty or malformed permission scopes, and records without durable source identities. This prevents accidentally inflating sample sizes with repeated or trivially empty cases; the same query may still appear under *different* permission scopes because it tests a different authorization decision. These checks do not make a small hand-selected benchmark representative.
+The fixture evaluator now rejects duplicate normalized query + permission-scope judgments, blank queries, malformed permission scopes, and records without durable source identities. An empty permission scope remains a valid, explicit no-access security-negative case. This prevents accidentally inflating sample sizes with repeated or trivially empty cases; the same query may still appear under *different* permission scopes because it tests a different authorization decision. These checks do not make a small hand-selected benchmark representative.
 
 For failure analysis, run `python -m evals.judged_fixtures --details`. The JSON includes `scope_cohorts`: per-source-scope positive case counts, positive-hit rates (at least one relevant record found), negative case counts, and negative false-positive rates. A `null` rate means the cohort has no cases of that type, not a perfect score. For example, the synthetic CRM-only cohort includes a deliberately missed typo; aggregate recall can obscure which source scopes are failing. Do not publish real query text in these diagnostics; they are intended for synthetic offline fixtures.
 
