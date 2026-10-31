@@ -150,3 +150,9 @@ def test_other_country_code_is_not_treated_as_us_phone() -> None:
     rows = [record("crm", "1", phone="4155550123")]
     hits = search_records(rows, "+44 415 555 0123", allowed_sources=frozenset({"crm"}))
     assert hits == []
+
+
+@pytest.mark.parametrize("limit, offset", [(True, 0), (1, False), (1.5, 0), (1, 2.5), ("1", 0)])
+def test_search_rejects_noninteger_pagination(limit, offset) -> None:
+    with pytest.raises(ValueError):
+        search_records([], "asha", allowed_sources=frozenset({"crm"}), limit=limit, offset=offset)
