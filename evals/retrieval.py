@@ -15,42 +15,107 @@ class RetrievalCase:
     allowed_sources: frozenset[str]
 
 
-def evaluate_retrieval(
+@dataclass(frozen=True)
+class RetrievalDiagnostic:
+    """Offline query outcome; do not log real-user query contents."""
+
+    query: str
+    allowed_sources: tuple[str, ...]
+    relevant_keys: tuple[RecordKey, ...]
+    retrieved_keys: tuple[RecordKey, ...]
+    missed_keys: tuple[RecordKey, ...]
+    unexpected_keys: tuple[RecordKey, ...]
+    first_relevant_rank: int | None
+
+
+def evaluate_retrieval_detailed(
     records: list[IntakeRecord],
     cases: list[RetrievalCase],
     *,
     k: int = 5,
-) -> dict[str, float | int]:
-    """Recall@K and MRR@K for judged queries; zero-result rate for all cases."""
-    if not 1 <= k <= 100:
+) -> tuple[dict[str, float | int], list[RetrievalDiagnostic]]:
+    """Compute aggregate metrics and per-case failure evidence in one validated pass."""
+    if isinstance(k, bool) or not isinstance(k, int) or not 1 <= k <= 100:
         raise ValueError("k must be between 1 and 100")
 
+    keys = [(record.source, record.external_id) for record in records]
+    if len(keys) != len(set(keys)):
+        raise ValueError("evaluation records contain duplicate source identities")
+    available_keys = set(keys)
+
     recall_sum = reciprocal_rank_sum = precision_sum = 0.0
-    judged = zero_results = 0
+    judged = zero_results = negative_cases = false_positive_cases = 0
+    diagnostics: list[RetrievalDiagnostic] = []
     for case in cases:
         if any(source not in case.allowed_sources for source, _ in case.relevant_keys):
             raise ValueError("relevance judgments must respect the allowed source scope")
+        if not case.relevant_keys <= available_keys:
+            raise ValueError("relevance judgments reference unknown record identities")
         hits = search_records(records, case.query, allowed_sources=case.allowed_sources, limit=k)
         found = [(hit.record.source, hit.record.external_id) for hit in hits]
+        # The evaluator must not silently award quality credit to a retrieval
+        # implementation that violates scope, identity, or page-size contracts.
+        if len(found) > k:
+            raise ValueError("retrieval returned more than k hits")
+        if any(source not in case.allowed_sources for source, _ in found):
+            raise ValueError("retrieval returned out-of-scope record")
+        if any(key not in available_keys for key in found):
+            raise ValueError("retrieval returned unknown record identity")
+        if len(found) != len(set(found)):
+            raise ValueError("retrieval returned duplicate record identities")
+        first_rank = next(
+            (rank for rank, key in enumerate(found, start=1) if key in case.relevant_keys),
+            None,
+        )
+        diagnostics.append(
+            RetrievalDiagnostic(
+                query=case.query,
+                allowed_sources=tuple(sorted(case.allowed_sources)),
+                relevant_keys=tuple(sorted(case.relevant_keys)),
+                retrieved_keys=tuple(found),
+                missed_keys=tuple(sorted(case.relevant_keys.difference(found))),
+                unexpected_keys=tuple(key for key in found if key not in case.relevant_keys),
+                first_relevant_rank=first_rank,
+            )
+        )
         if not found:
             zero_results += 1
         if not case.relevant_keys:
+            negative_cases += 1
+            if found:
+                false_positive_cases += 1
             continue
 
         judged += 1
         relevant_found = len(case.relevant_keys.intersection(found))
         recall_sum += relevant_found / len(case.relevant_keys)
         precision_sum += relevant_found / k
-        for rank, key in enumerate(found, start=1):
-            if key in case.relevant_keys:
-                reciprocal_rank_sum += 1 / rank
-                break
+        if first_rank is not None:
+            reciprocal_rank_sum += 1 / first_rank
 
-    return {
+    metrics = {
         "cases": len(cases),
         "judged_cases": judged,
         "recall_at_k": recall_sum / judged if judged else 0.0,
         "precision_at_k": precision_sum / judged if judged else 0.0,
         "mrr_at_k": reciprocal_rank_sum / judged if judged else 0.0,
         "zero_result_rate": zero_results / len(cases) if cases else 0.0,
+        "negative_cases": negative_cases,
+        "false_positive_rate_on_negatives": (
+            false_positive_cases / negative_cases if negative_cases else 0.0
+        ),
     }
+
+
+    return metrics, diagnostics
+
+
+def evaluate_retrieval(
+    records: list[IntakeRecord],
+    cases: list[RetrievalCase],
+    *,
+    k: int = 5,
+) -> dict[str, float | int]:
+    """Backward-compatible aggregate metrics; use detailed API for query failures."""
+    metrics, _ = evaluate_retrieval_detailed(records, cases, k=k)
+    return metrics

@@ -5,10 +5,13 @@ code, so ranking changes can be measured against them. The fixture is small and
 synthetic: it is a regression set, not evidence of real-world search quality.
 """
 
-from app.models import IntakeRecord
-from evals.retrieval import RetrievalCase, evaluate_retrieval
+from dataclasses import asdict
 
-FIXTURE_VERSION = "2026-10-14.1"
+from app.models import IntakeRecord
+from evals.quality_gate import gate_evidence
+from evals.retrieval import RetrievalCase, evaluate_retrieval, evaluate_retrieval_detailed
+
+FIXTURE_VERSION = "2026-10-27.1"
 
 RECORDS = [
     IntakeRecord(source="crm", external_id="c1", first_name="Ada", last_name="Lovelace",
@@ -40,6 +43,21 @@ CASES = [
     RetrievalCase("Analytical", frozenset({("crm", "c1")}), frozenset({"crm"})),
     RetrievalCase("Grace Hopper", frozenset(), frozenset({"partner"})),
     RetrievalCase("missing person", frozenset(), frozenset({"crm", "import", "partner"})),
+    # Intentionally relevant-looking but outside the allowed source scope.
+    RetrievalCase("Ada Lovelace", frozenset(), frozenset({"partner"})),
+    # Additional hand-judged coverage for sparse records, phone suffixes,
+    # source ambiguity, and a known lexical typo failure.
+    RetrievalCase("Grace Hopper", frozenset({("crm", "c2")}), frozenset({"crm"})),
+    RetrievalCase("Navy", frozenset({("crm", "c2")}), frozenset({"crm"})),
+    RetrievalCase("5550123", frozenset({("partner", "p1")}), frozenset({"partner"})),
+    RetrievalCase("4155550199", frozenset({("import", "i2")}), frozenset({"import"})),
+    RetrievalCase("Kim", frozenset({("partner", "p2")}), frozenset({"partner"})),
+    RetrievalCase("Dev Patel", frozenset({("partner", "p1"), ("import", "i2")}),
+                  frozenset({"partner", "import"})),
+    RetrievalCase("5550199", frozenset(), frozenset({"crm"})),
+    RetrievalCase("absent@unknown.example", frozenset(),
+                  frozenset({"crm", "import", "partner"})),
+    RetrievalCase("Grace Hoper", frozenset({("crm", "c2")}), frozenset({"crm"})),
 ]
 
 
@@ -48,7 +66,28 @@ def judged_report(k: int = 5) -> dict[str, float | int | str]:
     return {"fixture_version": FIXTURE_VERSION, "k": k, **report}
 
 
+def judged_detailed_report(k: int = 5) -> dict[str, object]:
+    """Synthetic per-case failures alongside the stable aggregate report."""
+    summary, cases = evaluate_retrieval_detailed(RECORDS, CASES, k=k)
+    return {
+        "summary": {"fixture_version": FIXTURE_VERSION, "k": k, **summary},
+        "cases": [asdict(case) for case in cases],
+    }
+
+
 if __name__ == "__main__":
+    import argparse
     import json
 
-    print(json.dumps(judged_report(), indent=2, sort_keys=True))
+    parser = argparse.ArgumentParser(description="Run the synthetic judged retrieval fixture")
+    parser.add_argument("--k", type=int, default=5, help="ranking cutoff (1 to 100)")
+    parser.add_argument("--details", action="store_true", help="include per-query failure evidence")
+    parser.add_argument("--gate", action="store_true", help="enforce reviewed synthetic CI baseline")
+    args = parser.parse_args()
+    report = judged_detailed_report(args.k) if args.details else judged_report(args.k)
+    outcome = gate_evidence(report["summary"] if args.details else report) if args.gate else None
+    if outcome is not None:
+        report["gate"] = outcome
+    print(json.dumps(report, indent=2, sort_keys=True))
+    if outcome is not None and not outcome["passed"]:
+        raise SystemExit(1)
