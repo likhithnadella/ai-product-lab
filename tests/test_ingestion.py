@@ -192,3 +192,50 @@ def test_store_put_and_upsert_reject_blank_source(source: str) -> None:
         store.upsert(blank)
 
     assert store.all() == []
+
+def test_store_copies_records_on_create_and_update() -> None:
+    store = InMemoryRecordStore()
+    incoming = record("row-1", attributes={"origin": "initial"})
+    assert store.upsert(incoming) == "created"
+    incoming.attributes["origin"] = "mutated"
+    assert store.get("csv_import", "row-1").attributes["origin"] == "initial"
+
+    updated = record("row-1", attributes={"origin": "updated"})
+    assert store.upsert(updated) == "updated"
+    updated.attributes["origin"] = "mutated-again"
+    assert store.get("csv_import", "row-1").attributes["origin"] == "updated"
+
+
+def test_store_get_and_all_do_not_expose_mutable_internal_state() -> None:
+    store = InMemoryRecordStore()
+    store.put(record("row-1", attributes={"team": "original"}))
+    retrieved = store.get("csv_import", "row-1")
+    assert retrieved is not None
+    retrieved.attributes["team"] = "changed"
+    snapshot = store.all()
+    snapshot[0].attributes["team"] = "also-changed"
+    assert store.get("csv_import", "row-1").attributes["team"] == "original"
+    assert store.upsert(record("row-1", attributes={"team": "original"})) == "unchanged"
+
+
+def test_mutating_input_identity_does_not_change_store_key() -> None:
+    store = InMemoryRecordStore()
+    incoming = record("row-1", attributes={"nested": "initial"})
+    assert store.upsert(incoming) == "created"
+    incoming.external_id = "row-2"
+    incoming.source = "other_source"
+    incoming.attributes["nested"] = "changed"
+    assert store.get("csv_import", "row-1").attributes == {"nested": "initial"}
+    assert store.get("other_source", "row-2") is None
+    assert store.upsert(record("row-1", attributes={"nested": "initial"})) == "unchanged"
+
+
+def test_mutating_retrieved_identity_does_not_change_store_key() -> None:
+    store = InMemoryRecordStore()
+    store.put(record("row-1"))
+    retrieved = store.get("csv_import", "row-1")
+    assert retrieved is not None
+    retrieved.source = "changed"
+    retrieved.external_id = "changed"
+    assert store.get("csv_import", "row-1").external_id == "row-1"
+    assert store.get("changed", "changed") is None
