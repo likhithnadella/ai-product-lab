@@ -78,3 +78,42 @@ def test_judged_cli_can_emit_machine_readable_diagnostics() -> None:
     assert report["summary"]["cases"] == 19
     assert len(report["cases"]) == 19
     assert report["cases"][-1]["query"] == "Grace Hoper"
+
+
+
+def test_judged_cli_quality_gate_passes_and_reports_reviewed_policy() -> None:
+    result = subprocess.run(
+        [sys.executable, "-m", "evals.judged_fixtures", "--gate"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    report = json.loads(result.stdout)
+    assert report["gate"]["passed"] is True
+    assert report["gate"]["violations"] == []
+    assert report["gate"]["policy"]["k"] == 5
+
+
+def test_judged_cli_quality_gate_fails_closed_on_unreviewed_cutoff() -> None:
+    result = subprocess.run(
+        [sys.executable, "-m", "evals.judged_fixtures", "--gate", "--details", "--k", "1"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 1
+    report = json.loads(result.stdout)
+    assert report["gate"]["passed"] is False
+    assert any("k differs" in reason for reason in report["gate"]["violations"])
+    assert len(report["cases"]) == 19
+
+
+def test_judged_cli_without_gate_keeps_its_existing_output_contract() -> None:
+    result = subprocess.run(
+        [sys.executable, "-m", "evals.judged_fixtures"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert "gate" not in json.loads(result.stdout)

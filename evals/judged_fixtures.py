@@ -8,6 +8,7 @@ synthetic: it is a regression set, not evidence of real-world search quality.
 from dataclasses import asdict
 
 from app.models import IntakeRecord
+from evals.quality_gate import gate_evidence
 from evals.retrieval import RetrievalCase, evaluate_retrieval, evaluate_retrieval_detailed
 
 FIXTURE_VERSION = "2026-10-27.1"
@@ -81,6 +82,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run the synthetic judged retrieval fixture")
     parser.add_argument("--k", type=int, default=5, help="ranking cutoff (1 to 100)")
     parser.add_argument("--details", action="store_true", help="include per-query failure evidence")
+    parser.add_argument("--gate", action="store_true", help="enforce reviewed synthetic CI baseline")
     args = parser.parse_args()
     report = judged_detailed_report(args.k) if args.details else judged_report(args.k)
+    outcome = gate_evidence(report["summary"] if args.details else report) if args.gate else None
+    if outcome is not None:
+        report["gate"] = outcome
     print(json.dumps(report, indent=2, sort_keys=True))
+    if outcome is not None and not outcome["passed"]:
+        raise SystemExit(1)
