@@ -61,7 +61,7 @@ def evaluate_retrieval_detailed(
         if not isinstance(case.query, str) or not case.query.strip():
             raise ValueError("evaluation queries must be nonblank strings")
         if not isinstance(case.allowed_sources, frozenset):
-            raise ValueError("evaluation requires a frozenset source scope")
+            raise TypeError("evaluation requires a frozenset source scope")
         if any(
             not isinstance(source, str) or not source.strip() or source != source.strip()
             for source in case.allowed_sources
