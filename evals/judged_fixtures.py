@@ -10,6 +10,7 @@ from dataclasses import asdict
 from app.models import IntakeRecord
 from evals.quality_gate import gate_evidence
 from evals.retrieval import RetrievalCase, evaluate_retrieval, evaluate_retrieval_detailed
+from evals.scope_cohorts import scope_cohorts
 
 FIXTURE_VERSION = "2026-10-27.1"
 
@@ -72,6 +73,7 @@ def judged_detailed_report(k: int = 5) -> dict[str, object]:
     return {
         "summary": {"fixture_version": FIXTURE_VERSION, "k": k, **summary},
         "cases": [asdict(case) for case in cases],
+        "scope_cohorts": scope_cohorts(CASES, cases),
     }
 
 
