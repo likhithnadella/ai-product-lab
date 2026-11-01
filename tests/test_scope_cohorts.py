@@ -19,6 +19,8 @@ def test_scope_breakdown_exposes_known_typo_miss() -> None:
     assert crm["positive_cases"] == 7
     assert crm["positive_hits"] == 6
     assert crm["positive_hit_rate"] == pytest.approx(6 / 7)
+    assert crm["positive_recall_at_k"] == pytest.approx(6 / 7)
+    assert crm["positive_mrr_at_k"] == pytest.approx(6 / 7)
     assert crm["negative_cases"] == 1
     assert crm["negative_false_positives"] == 0
 
@@ -119,3 +121,29 @@ def test_partial_recall_is_not_misreported_as_full_scope_success() -> None:
     assert cohort["positive_hit_rate"] == 1.0
     assert cohort["positive_recall_at_k"] == 0.5
     assert cohort["positive_mrr_at_k"] == 1.0
+
+
+def test_compact_cohort_cli_retains_aggregate_gate_without_query_details() -> None:
+    result = subprocess.run(
+        [sys.executable, "-m", "evals.judged_fixtures", "--cohorts", "--gate"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    payload = json.loads(result.stdout)
+    assert set(payload) == {"summary", "scope_cohorts", "gate"}
+    assert payload["gate"]["passed"] is True
+    assert payload["summary"]["judged_cases"] == 14
+    assert payload["scope_cohorts"]
+    assert all("query" not in cohort for cohort in payload["scope_cohorts"])
+
+
+def test_cohort_cli_and_per_query_details_are_mutually_exclusive() -> None:
+    result = subprocess.run(
+        [sys.executable, "-m", "evals.judged_fixtures", "--cohorts", "--details"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert "not allowed with argument" in result.stderr
