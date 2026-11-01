@@ -32,6 +32,24 @@ def scope_cohorts(
         scope = tuple(sorted(case.allowed_sources))
         if scope != diagnostic.allowed_sources or case.query != diagnostic.query:
             raise ValueError("diagnostic does not match the corresponding judgment")
+        # Cohort metrics must not trust fabricated or stale diagnostic evidence.
+        # The evaluator is the source of truth; this checks internal consistency,
+        # not whether a retrieval engine produced the claimed hits.
+        found = diagnostic.retrieved_keys
+        expected_rank = next(
+            (rank for rank, key in enumerate(found, start=1) if key in case.relevant_keys),
+            None,
+        )
+        if (
+            diagnostic.relevant_keys != tuple(sorted(case.relevant_keys))
+            or len(found) != len(set(found))
+            or any(source not in case.allowed_sources for source, _ in found)
+            or diagnostic.missed_keys != tuple(sorted(case.relevant_keys.difference(found)))
+            or diagnostic.unexpected_keys
+            != tuple(key for key in found if key not in case.relevant_keys)
+            or diagnostic.first_relevant_rank != expected_rank
+        ):
+            raise ValueError("inconsistent diagnostic evidence for scope cohort")
         counts = groups[scope]
         if case.relevant_keys:
             counts["positive_cases"] += 1
