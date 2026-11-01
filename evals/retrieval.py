@@ -38,6 +38,16 @@ def evaluate_retrieval_detailed(
     if isinstance(k, bool) or not isinstance(k, int) or not 1 <= k <= 100:
         raise ValueError("k must be between 1 and 100")
 
+    # Reject incomplete source identities before measuring retrieval quality.
+    # Otherwise synthetic fixtures can silently judge records search will omit.
+    for record in records:
+        if (
+            not isinstance(record.source, str)
+            or not record.source.strip()
+            or not isinstance(record.external_id, str)
+            or not record.external_id.strip()
+        ):
+            raise ValueError("evaluation records require nonblank source and external_id")
     keys = [(record.source, record.external_id) for record in records]
     if len(keys) != len(set(keys)):
         raise ValueError("evaluation records contain duplicate source identities")
@@ -46,7 +56,21 @@ def evaluate_retrieval_detailed(
     recall_sum = reciprocal_rank_sum = precision_sum = 0.0
     judged = zero_results = negative_cases = false_positive_cases = 0
     diagnostics: list[RetrievalDiagnostic] = []
+    seen_queries: set[tuple[str, tuple[str, ...]]] = set()
     for case in cases:
+        if not isinstance(case.query, str) or not case.query.strip():
+            raise ValueError("evaluation queries must be nonblank strings")
+        if not isinstance(case.allowed_sources, frozenset):
+            raise TypeError("evaluation requires a frozenset source scope")
+        if any(
+            not isinstance(source, str) or not source.strip() or source != source.strip()
+            for source in case.allowed_sources
+        ):
+            raise ValueError("evaluation source scope contains invalid source")
+        query_key = (case.query.strip().casefold(), tuple(sorted(case.allowed_sources)))
+        if query_key in seen_queries:
+            raise ValueError("duplicate query and source scope in evaluation judgments")
+        seen_queries.add(query_key)
         if any(source not in case.allowed_sources for source, _ in case.relevant_keys):
             raise ValueError("relevance judgments must respect the allowed source scope")
         if not case.relevant_keys <= available_keys:

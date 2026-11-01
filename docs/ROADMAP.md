@@ -24,6 +24,14 @@ An internal lexical baseline and a small versioned synthetic judged-query fixtur
 
 **Current CI regression gate (synthetic only):** `python -m evals.judged_fixtures --gate` verifies the reviewed fixture version `2026-10-27.1` at cutoff K=5, at least 14 positive and 5 negative judgments, Recall@5 and MRR@5 >= 0.90, Precision@5 >= 0.20, and zero false positives on negative cases. It rejects missing, malformed, nonfinite, or inconsistent metric evidence and exits nonzero on a failure. Use `--details` to inspect individual synthetic misses; the default CLI output remains unchanged without `--gate`. The reviewed baseline measures 13/14 Recall@5 and MRR@5 and 16/70 Precision@5, not real-world performance. Thresholds are intentionally below that baseline to detect gross regressions; they are not a service-level objective. Changing fixture version, K, or thresholds requires an explicit reviewed rebaseline. This small fixture can still overfit, and the gate cannot prove retrieval security or generalization.
 
+### Judgment integrity and scope diagnostics
+
+The fixture evaluator now rejects duplicate normalized query + permission-scope judgments, blank queries, malformed permission scopes, and records without durable source identities. An empty permission scope remains a valid, explicit no-access security-negative case. This prevents accidentally inflating sample sizes with repeated or trivially empty cases; the same query may still appear under *different* permission scopes because it tests a different authorization decision. These checks do not make a small hand-selected benchmark representative.
+
+For failure analysis, run `python -m evals.judged_fixtures --details`. The JSON includes `scope_cohorts`: per-source-scope positive case counts, positive-hit rates (at least one relevant record found), negative case counts, and negative false-positive rates. A `null` rate means the cohort has no cases of that type, not a perfect score. For example, the synthetic CRM-only cohort includes a deliberately missed typo; aggregate recall can obscure which source scopes are failing. Do not publish real query text in these diagnostics; they are intended for synthetic offline fixtures.
+
+The existing `--gate` still enforces **aggregate** synthetic thresholds only. Per-scope results are diagnostic, not additional pass/fail criteria. Before making them CI gates, review the cohort sizes, define minimum denominators, and version an independent fixture with enough judgments to avoid overfitting.
+
 ## 3. Can a model answer without inventing context?
 
 Add a provider boundary and structured model outputs after retrieval has a benchmark.
