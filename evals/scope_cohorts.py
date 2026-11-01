@@ -28,6 +28,8 @@ def scope_cohorts(
             "negative_false_positives": 0,
         }
     )
+    recall_sums: dict[tuple[str, ...], float] = defaultdict(float)
+    reciprocal_rank_sums: dict[tuple[str, ...], float] = defaultdict(float)
     for case, diagnostic in zip(cases, diagnostics, strict=True):
         scope = tuple(sorted(case.allowed_sources))
         if scope != diagnostic.allowed_sources or case.query != diagnostic.query:
@@ -54,6 +56,11 @@ def scope_cohorts(
         if case.relevant_keys:
             counts["positive_cases"] += 1
             counts["positive_hits"] += int(diagnostic.first_relevant_rank is not None)
+            recall_sums[scope] += len(case.relevant_keys.intersection(diagnostic.retrieved_keys)) / len(
+                case.relevant_keys
+            )
+            if diagnostic.first_relevant_rank is not None:
+                reciprocal_rank_sums[scope] += 1 / diagnostic.first_relevant_rank
         else:
             counts["negative_cases"] += 1
             counts["negative_false_positives"] += int(bool(diagnostic.retrieved_keys))
@@ -64,6 +71,13 @@ def scope_cohorts(
             **counts,
             "positive_hit_rate": (
                 counts["positive_hits"] / counts["positive_cases"]
+                if counts["positive_cases"] else None
+            ),
+            "positive_recall_at_k": (
+                recall_sums[scope] / counts["positive_cases"] if counts["positive_cases"] else None
+            ),
+            "positive_mrr_at_k": (
+                reciprocal_rank_sums[scope] / counts["positive_cases"]
                 if counts["positive_cases"] else None
             ),
             "negative_false_positive_rate": (
