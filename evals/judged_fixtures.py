@@ -83,11 +83,15 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Run the synthetic judged retrieval fixture")
     parser.add_argument("--k", type=int, default=5, help="ranking cutoff (1 to 100)")
-    parser.add_argument("--details", action="store_true", help="include per-query failure evidence")
+    output = parser.add_mutually_exclusive_group()
+    output.add_argument("--details", action="store_true", help="include per-query failure evidence")
+    output.add_argument("--cohorts", action="store_true", help="include only scope cohort diagnostics")
     parser.add_argument("--gate", action="store_true", help="enforce reviewed synthetic CI baseline")
     args = parser.parse_args()
-    report = judged_detailed_report(args.k) if args.details else judged_report(args.k)
-    outcome = gate_evidence(report["summary"] if args.details else report) if args.gate else None
+    report = judged_detailed_report(args.k) if args.details or args.cohorts else judged_report(args.k)
+    if args.cohorts:
+        report = {"summary": report["summary"], "scope_cohorts": report["scope_cohorts"]}
+    outcome = gate_evidence(report["summary"] if args.details or args.cohorts else report) if args.gate else None
     if outcome is not None:
         report["gate"] = outcome
     print(json.dumps(report, indent=2, sort_keys=True))
