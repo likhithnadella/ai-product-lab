@@ -44,7 +44,11 @@ def assemble_context(
     ranking. Never pass an untrusted or request-body-created principal here.
     The returned field values are untrusted data, NOT safe prompt instructions.
     """
-    if isinstance(max_hits, bool) or not isinstance(max_hits, int) or not 1 <= max_hits <= _MAX_CONTEXT_HITS:
+    if (
+        isinstance(max_hits, bool)
+        or not isinstance(max_hits, int)
+        or not 1 <= max_hits <= _MAX_CONTEXT_HITS
+    ):
         raise ValueError("max_hits must be an integer between 1 and 20")
     if not isinstance(query, str) or not query.strip():
         raise ValueError("query must be a nonblank string")
