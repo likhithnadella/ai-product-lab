@@ -49,7 +49,7 @@ def test_confirmation_required(account, actor):
     assert simulator.outcomes == {}
 
 
-@pytest.mark.parametrize("amount", [Decimal("0"), Decimal("-1"), Decimal("19"), Decimal("NaN")])
+@pytest.mark.parametrize("amount", [Decimal(0), Decimal(-1), Decimal(19), Decimal("NaN")])
 def test_invalid_amount_rejected(account, actor, amount):
     result = CreditSimulator().apply(
         account, actor, amount, confirmed=True, idempotency_key="req-1"
@@ -80,15 +80,15 @@ def test_reusing_key_with_different_payload_is_rejected(account, actor):
 
 
 def test_cross_tenant_attempt_never_applies(account, actor):
-    other = Account("tenant-b", "acct-001", Decimal("60"), Decimal("18"))
+    other = Account("tenant-b", "acct-001", Decimal(60), Decimal(18))
     result = CreditSimulator().apply(
-        other, actor, Decimal("5"), confirmed=True, idempotency_key="req-1"
+        other, actor, Decimal(5), confirmed=True, idempotency_key="req-1"
     )
     assert result.reason == "unauthorized"
 
 
 def test_invalid_idempotency_key(account, actor):
     result = CreditSimulator().apply(
-        account, actor, Decimal("5"), confirmed=True, idempotency_key=""
+        account, actor, Decimal(5), confirmed=True, idempotency_key=""
     )
     assert result.reason == "invalid_idempotency_key"
