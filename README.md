@@ -79,6 +79,23 @@ The repository currently contains:
 
 See [the roadmap](docs/ROADMAP.md) for how this grows from a small trustworthy core into a production-style AI system.
 
+## Try the local evidence preview (synthetic only)
+
+A small runnable slice now demonstrates how tenant/source-scoped lexical retrieval
+becomes **structured, attributable evidence**, before introducing a model.
+It projects only name/company fields, retains source-record provenance, and
+explicitly abstains when no record matches. It is **not** a generated answer,
+authentication mechanism, public API, or prompt-injection defense.
+
+```bash
+python -m app.context_demo
+pytest -q tests/test_context_preview.py tests/test_context_demo.py
+```
+
+The demo uses invented records and does not require credentials or network access.
+See [context preview and trust boundaries](docs/CONTEXT_PREVIEW.md) for the
+threat model, limitations, and next engineering steps.
+
 ## Why the architecture is deliberately small
 
 This repo is meant to demonstrate engineering judgment, not the number of infrastructure logos that can fit in a diagram.
