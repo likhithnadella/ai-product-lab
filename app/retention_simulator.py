@@ -39,6 +39,8 @@ def assess_credit(account: Account, actor: Actor) -> Decision:
         return Decision(False, "unauthorized")
     if not account.active:
         return Decision(False, "inactive")
+    if not account.monthly_charge.is_finite() or not account.disputed_charge.is_finite():
+        return Decision(False, "invalid_amount")
     if account.monthly_charge <= 0 or account.disputed_charge <= 0:
         return Decision(False, "invalid_amount")
     if account.disputed_charge > account.monthly_charge:
@@ -70,7 +72,7 @@ class CreditSimulator:
         confirmed: bool,
         idempotency_key: str,
     ) -> ActionResult:
-        if not idempotency_key or len(idempotency_key) > 128:
+        if not idempotency_key or not idempotency_key.strip() or len(idempotency_key) > 128:
             return ActionResult("rejected", "invalid_idempotency_key")
         key = (actor.tenant_id, idempotency_key)
         fingerprint = (account.tenant_id, account.account_id, amount)
@@ -87,8 +89,6 @@ class CreditSimulator:
         decision = assess_credit(account, actor)
         if not decision.eligible:
             return ActionResult("rejected", decision.reason)
-        if not confirmed:
-            return ActionResult("rejected", "confirmation_required")
         if not amount.is_finite() or amount <= 0 or amount > decision.maximum_credit:
             return ActionResult("rejected", "outside_policy")
         result = ActionResult("applied", "simulated_credit", amount)
