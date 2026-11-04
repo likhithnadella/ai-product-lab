@@ -92,3 +92,42 @@ def test_invalid_idempotency_key(account, actor):
         account, actor, Decimal(5), confirmed=True, idempotency_key=""
     )
     assert result.reason == "invalid_idempotency_key"
+
+
+@pytest.mark.parametrize("value", [Decimal("NaN"), Decimal("Infinity"), Decimal("-Infinity")])
+@pytest.mark.parametrize("field_name", ["monthly_charge", "disputed_charge"])
+def test_nonfinite_account_values_fail_closed(account, actor, value, field_name):
+    changed = {**account.__dict__, field_name: value}
+    invalid = Account(**changed)
+    decision = assess_credit(invalid, actor)
+    assert decision.reason == "invalid_amount"
+    result = CreditSimulator().apply(
+        invalid, actor, Decimal("5.00"), confirmed=True, idempotency_key="req-1"
+    )
+    assert result.status == "rejected"
+
+
+@pytest.mark.parametrize("key", [" ", "\t", "\n", " " * 129])
+def test_whitespace_or_oversized_replay_key_rejected(account, actor, key):
+    result = CreditSimulator().apply(
+        account, actor, Decimal("5.00"), confirmed=True, idempotency_key=key
+    )
+    assert result.reason == "invalid_idempotency_key"
+
+
+def test_replay_requires_current_confirmation_and_authorization(account, actor):
+    simulator = CreditSimulator()
+    original = simulator.apply(
+        account, actor, Decimal("5.00"), confirmed=True, idempotency_key="req-1"
+    )
+    assert original.status == "applied"
+    denied = simulator.apply(
+        account, actor, Decimal("5.00"), confirmed=False, idempotency_key="req-1"
+    )
+    assert denied.reason == "confirmation_required"
+    unauthorized = Actor("tenant-a", frozenset())
+    denied = simulator.apply(
+        account, unauthorized, Decimal("5.00"), confirmed=True, idempotency_key="req-1"
+    )
+    assert denied.reason == "unauthorized_or_ineligible"
+    assert len(simulator.outcomes) == 1
