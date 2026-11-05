@@ -129,5 +129,5 @@ def test_replay_requires_current_confirmation_and_authorization(account, actor):
     denied = simulator.apply(
         account, unauthorized, Decimal("5.00"), confirmed=True, idempotency_key="req-1"
     )
-    assert denied.reason == "unauthorized_or_ineligible"
+    assert denied.reason == "unauthorized"
     assert len(simulator.outcomes) == 1
