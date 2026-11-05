@@ -77,8 +77,9 @@ class CreditSimulator:
         key = (actor.tenant_id, idempotency_key)
         fingerprint = (account.tenant_id, account.account_id, amount)
         # Recheck authorization even for a replay; keys do not grant account access.
-        if not assess_credit(account, actor).eligible:
-            return ActionResult("rejected", "unauthorized_or_ineligible")
+        current_decision = assess_credit(account, actor)
+        if not current_decision.eligible:
+            return ActionResult("rejected", current_decision.reason)
         if not confirmed:
             return ActionResult("rejected", "confirmation_required")
         if key in self.outcomes:
