@@ -12,21 +12,21 @@ from app.retention_simulator import Account, Actor, CreditSimulator
 
 
 def main() -> None:
-    account = Account("demo-tenant", "demo-account", Decimal("60"), Decimal("18"))
+    account = Account("demo-tenant", "demo-account", Decimal(60), Decimal(18))
     actor = Actor("demo-tenant", frozenset({"demo-account"}))
     simulator = CreditSimulator()
     # Confirmation is an explicit separate input, never inferred from the model.
-    proposed = resolve(account, actor, Request("billing_credit", Decimal("10")), simulator)
+    proposed = resolve(account, actor, Request("billing_credit", Decimal(10)), simulator)
     confirmed = resolve(
         account,
         actor,
-        Request("billing_credit", Decimal("10"), confirmed=True, idempotency_key="demo-1"),
+        Request("billing_credit", Decimal(10), confirmed=True, idempotency_key="demo-1"),
         simulator,
     )
     replay = resolve(
         account,
         actor,
-        Request("billing_credit", Decimal("10"), confirmed=True, idempotency_key="demo-1"),
+        Request("billing_credit", Decimal(10), confirmed=True, idempotency_key="demo-1"),
         simulator,
     )
     output = {
