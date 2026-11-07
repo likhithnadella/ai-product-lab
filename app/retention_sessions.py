@@ -6,6 +6,7 @@ Callers must supply a trusted authenticated Actor and server-side session ID.
 
 from dataclasses import dataclass, field
 from decimal import Decimal
+from math import isfinite
 from secrets import token_urlsafe
 from threading import RLock
 from time import monotonic
@@ -35,7 +36,7 @@ class SessionRetentionController:
     _lock: RLock = field(default_factory=RLock, repr=False)
 
     def __post_init__(self) -> None:
-        if not 0 < self.ttl_seconds <= 3600:
+        if not isfinite(self.ttl_seconds) or not 0 < self.ttl_seconds <= 3600:
             raise ValueError("ttl_seconds must be within (0, 3600]")
 
     def propose(
