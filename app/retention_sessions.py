@@ -1,14 +1,16 @@
-"""In-memory, session-bound pending credit offers for a synthetic pilot.
+"""In-memory, session-bound expiring credit offers for a synthetic pilot.
 
-This is NOT authentication or durable transaction storage. The caller must
-supply an already-authenticated Actor and a trusted server-side session ID.
-A model must never supply identity, session IDs, or confirmation authority.
+NOT authentication, durable transactions, or distributed concurrency control.
+Callers must supply a trusted authenticated Actor and server-side session ID.
 """
 
 from dataclasses import dataclass, field
 from decimal import Decimal
+from math import isfinite
 from secrets import token_urlsafe
-from typing import Literal
+from threading import RLock
+from time import monotonic
+from typing import Callable, Literal
 
 from app.retention_conversation import Request, Response, resolve
 from app.retention_simulator import Account, Actor, CreditSimulator
@@ -20,29 +22,39 @@ class PendingOffer:
     account_id: str
     session_id: str
     amount: Decimal
+    expires_at: float
 
 
 @dataclass
 class SessionRetentionController:
-    """One-shot pending offers; no persistence, expiry or concurrency guarantees."""
+    """Process-local, expiring one-shot offers with serialized confirmation."""
 
     simulator: CreditSimulator = field(default_factory=CreditSimulator)
     pending: dict[str, PendingOffer] = field(default_factory=dict)
+    ttl_seconds: float = 300.0
+    clock: Callable[[], float] = monotonic
+    _lock: RLock = field(default_factory=RLock, repr=False)
+
+    def __post_init__(self) -> None:
+        if not isfinite(self.ttl_seconds) or not 0 < self.ttl_seconds <= 3600:
+            raise ValueError("ttl_seconds must be within (0, 3600]")
 
     def propose(
         self, account: Account, actor: Actor, *, session_id: str, amount: Decimal
     ) -> tuple[Response, str | None]:
-        """Issue a random offer handle only after access and policy checks pass."""
+        """Issue an expiring random offer handle after authorization and policy checks."""
         if not session_id or not session_id.strip():
             return Response("escalated", "invalid_session", "verify_identity", ("session_denied",)), None
-        result = resolve(account, actor, Request("billing_credit", amount), self.simulator)
-        if result.outcome != "offer":
-            return result, None
-        handle = token_urlsafe(32)
-        self.pending[handle] = PendingOffer(
-            account.tenant_id, account.account_id, session_id, amount
-        )
-        return result, handle
+        with self._lock:
+            result = resolve(account, actor, Request("billing_credit", amount), self.simulator)
+            if result.outcome != "offer":
+                return result, None
+            handle = token_urlsafe(32)
+            self.pending[handle] = PendingOffer(
+                account.tenant_id, account.account_id, session_id, amount,
+                self.clock() + self.ttl_seconds,
+            )
+            return result, handle
 
     def confirm(
         self,
@@ -53,31 +65,30 @@ class SessionRetentionController:
         offer_handle: str,
         decision: Literal["accept", "decline"],
     ) -> Response:
-        """Consume an offer on acceptance; reject mismatched sessions and identities."""
+        """Authorize, check expiry, then consume and resolve under a process-local lock."""
         if decision not in ("accept", "decline"):
             return Response("escalated", "invalid_decision", "human_review", ("confirmation_denied",))
         if not session_id or not session_id.strip() or not offer_handle:
             return Response("escalated", "invalid_confirmation", "human_review", ("confirmation_denied",))
-        offer = self.pending.get(offer_handle)
-        if offer is None:
-            return Response("escalated", "offer_not_found", "human_review", ("confirmation_denied",))
-        if (
-            offer.tenant_id != actor.tenant_id
-            or offer.tenant_id != account.tenant_id
-            or offer.account_id != account.account_id
-            or offer.account_id not in actor.authorized_account_ids
-            or offer.session_id != session_id
-        ):
-            return Response("escalated", "unauthorized", "verify_identity", ("confirmation_denied",))
-        # A decline invalidates the offer without executing a write.
-        if decision == "decline":
+        with self._lock:
+            offer = self.pending.get(offer_handle)
+            if offer is None:
+                return Response("escalated", "offer_not_found", "human_review", ("confirmation_denied",))
+            if (
+                offer.tenant_id != actor.tenant_id
+                or offer.tenant_id != account.tenant_id
+                or offer.account_id != account.account_id
+                or offer.account_id not in actor.authorized_account_ids
+                or offer.session_id != session_id
+            ):
+                return Response("escalated", "unauthorized", "verify_identity", ("confirmation_denied",))
+            if self.clock() >= offer.expires_at:
+                self.pending.pop(offer_handle)
+                return Response("escalated", "offer_expired", "human_review", ("confirmation_denied",))
             self.pending.pop(offer_handle)
-            return Response("escalated", "offer_declined", "human_review", ("offer_declined",))
-        # One-shot semantics: a second confirmation must not execute another write.
-        self.pending.pop(offer_handle)
-        return resolve(
-            account,
-            actor,
-            Request("billing_credit", offer.amount, True, offer_handle),
-            self.simulator,
-        )
+            if decision == "decline":
+                return Response("escalated", "offer_declined", "human_review", ("offer_declined",))
+            return resolve(
+                account, actor, Request("billing_credit", offer.amount, True, offer_handle),
+                self.simulator,
+            )
