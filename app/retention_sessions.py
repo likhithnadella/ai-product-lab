@@ -42,6 +42,12 @@ class SessionRetentionController:
         if type(self.max_pending_offers) is not int or self.max_pending_offers < 1:
             raise ValueError("max_pending_offers must be a positive integer")
 
+    def _prune_expired(self, now: float) -> None:
+        """Reclaim expired handles while holding the controller lock."""
+        expired = [key for key, offer in self.pending.items() if now >= offer.expires_at]
+        for key in expired:
+            self.pending.pop(key, None)
+
     def propose(
         self, account: Account, actor: Actor, *, session_id: str, amount: Decimal
     ) -> tuple[Response, str | None]:
@@ -52,6 +58,8 @@ class SessionRetentionController:
             result = resolve(account, actor, Request("billing_credit", amount), self.simulator)
             if result.outcome != "offer":
                 return result, None
+            now = self.clock()
+            self._prune_expired(now)
             if len(self.pending) >= self.max_pending_offers:
                 return (
                     Response("escalated", "offer_capacity_reached", "human_review", ("capacity_denied",)),
@@ -60,7 +68,7 @@ class SessionRetentionController:
             handle = token_urlsafe(32)
             self.pending[handle] = PendingOffer(
                 account.tenant_id, account.account_id, session_id, amount,
-                self.clock() + self.ttl_seconds,
+                now + self.ttl_seconds,
             )
             return result, handle
 
