@@ -32,12 +32,21 @@ class SessionRetentionController:
     simulator: CreditSimulator = field(default_factory=CreditSimulator)
     pending: dict[str, PendingOffer] = field(default_factory=dict)
     ttl_seconds: float = 300.0
+    max_pending_offers: int = 1000
     clock: Callable[[], float] = monotonic
     _lock: RLock = field(default_factory=RLock, repr=False)
 
     def __post_init__(self) -> None:
         if not isfinite(self.ttl_seconds) or not 0 < self.ttl_seconds <= 3600:
             raise ValueError("ttl_seconds must be within (0, 3600]")
+        if type(self.max_pending_offers) is not int or self.max_pending_offers < 1:
+            raise ValueError("max_pending_offers must be a positive integer")
+
+    def _prune_expired(self, now: float) -> None:
+        """Reclaim expired handles while holding the controller lock."""
+        expired = [key for key, offer in self.pending.items() if now >= offer.expires_at]
+        for key in expired:
+            self.pending.pop(key, None)
 
     def propose(
         self, account: Account, actor: Actor, *, session_id: str, amount: Decimal
@@ -49,10 +58,17 @@ class SessionRetentionController:
             result = resolve(account, actor, Request("billing_credit", amount), self.simulator)
             if result.outcome != "offer":
                 return result, None
+            now = self.clock()
+            self._prune_expired(now)
+            if len(self.pending) >= self.max_pending_offers:
+                return (
+                    Response("escalated", "offer_capacity_reached", "human_review", ("capacity_denied",)),
+                    None,
+                )
             handle = token_urlsafe(32)
             self.pending[handle] = PendingOffer(
                 account.tenant_id, account.account_id, session_id, amount,
-                self.clock() + self.ttl_seconds,
+                now + self.ttl_seconds,
             )
             return result, handle
 
