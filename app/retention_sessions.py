@@ -33,6 +33,7 @@ class SessionRetentionController:
     pending: dict[str, PendingOffer] = field(default_factory=dict)
     ttl_seconds: float = 300.0
     max_pending_offers: int = 1000
+    max_pending_offers_per_tenant: int = 100
     clock: Callable[[], float] = monotonic
     _lock: RLock = field(default_factory=RLock, repr=False)
 
@@ -41,6 +42,8 @@ class SessionRetentionController:
             raise ValueError("ttl_seconds must be within (0, 3600]")
         if type(self.max_pending_offers) is not int or self.max_pending_offers < 1:
             raise ValueError("max_pending_offers must be a positive integer")
+        if type(self.max_pending_offers_per_tenant) is not int or self.max_pending_offers_per_tenant < 1:
+            raise ValueError("max_pending_offers_per_tenant must be a positive integer")
 
     def _prune_expired(self, now: float) -> None:
         """Reclaim expired handles while holding the controller lock."""
@@ -63,6 +66,14 @@ class SessionRetentionController:
             if len(self.pending) >= self.max_pending_offers:
                 return (
                     Response("escalated", "offer_capacity_reached", "human_review", ("capacity_denied",)),
+                    None,
+                )
+            tenant_pending = sum(
+                offer.tenant_id == account.tenant_id for offer in self.pending.values()
+            )
+            if tenant_pending >= self.max_pending_offers_per_tenant:
+                return (
+                    Response("escalated", "tenant_offer_capacity_reached", "human_review", ("capacity_denied",)),
                     None,
                 )
             handle = token_urlsafe(32)
