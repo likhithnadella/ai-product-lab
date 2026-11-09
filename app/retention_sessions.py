@@ -4,13 +4,13 @@ NOT authentication, durable transactions, or distributed concurrency control.
 Callers must supply a trusted authenticated Actor and server-side session ID.
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from decimal import Decimal
 from math import isfinite
 from secrets import token_urlsafe
 from threading import RLock
 from time import monotonic
-from collections.abc import Callable
 from typing import Literal
 
 from app.retention_conversation import Request, Response, resolve
