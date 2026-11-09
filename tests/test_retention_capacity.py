@@ -66,7 +66,7 @@ def test_consumed_offer_frees_capacity():
 
 
 def test_policy_denial_does_not_use_capacity():
-    _, account, actor, controller = setup_controller()
+    _, account, _actor, controller = setup_controller()
     unauthorized = Actor("tenant-other", frozenset({"acct-synthetic"}))
     response, handle = controller.propose(
         account, unauthorized, session_id="s1", amount=Decimal(10)
