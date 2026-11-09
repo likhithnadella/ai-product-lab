@@ -10,7 +10,8 @@ from math import isfinite
 from secrets import token_urlsafe
 from threading import RLock
 from time import monotonic
-from typing import Callable, Literal
+from collections.abc import Callable
+from typing import Literal
 
 from app.retention_conversation import Request, Response, resolve
 from app.retention_simulator import Account, Actor, CreditSimulator
