@@ -4,7 +4,7 @@ No real accounts, external services, or model calls. Scenario verdicts compare
 observed behavior against explicit expected outcomes, not production metrics.
 """
 
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from decimal import Decimal
 
 from app.retention_sessions import SessionRetentionController
@@ -29,6 +29,8 @@ CASES = (
     SessionCase("replay", "replay", "offer_not_found", 1),
     SessionCase("invalid_decision", "invalid_decision", "invalid_decision", 0),
     SessionCase("capacity", "capacity", "tenant_offer_capacity_reached", 0),
+    SessionCase("denial_does_not_consume", "denial_does_not_consume", "simulated_credit", 1),
+    SessionCase("expired_releases_quota", "expired_releases_quota", "confirmation_required", 0),
 )
 
 
@@ -46,7 +48,14 @@ def run_case(case: SessionCase) -> dict[str, object]:
         account, actor, session_id="session-a", amount=Decimal("10")
     )
     assert proposal.outcome == "offer" and handle is not None
-    if case.mode == "capacity":
+    if case.mode == "expired_releases_quota":
+        now[0] = 130.0
+        result, replacement = controller.propose(
+            account, actor, session_id="session-b", amount=Decimal("10")
+        )
+        observed_reason = result.reason
+        assert replacement is not None and replacement != handle
+    elif case.mode == "capacity":
         result, _ = controller.propose(
             account, actor, session_id="session-b", amount=Decimal("10")
         )
@@ -75,6 +84,16 @@ def run_case(case: SessionCase) -> dict[str, object]:
             target_account, target_actor, session_id=target_session,
             offer_handle=handle, decision=decision,
         )
+        if case.mode == "denial_does_not_consume":
+            denied = controller.confirm(
+                account, Actor("tenant-b", frozenset({"account-a"})),
+                session_id="session-a", offer_handle=handle, decision="accept",
+            )
+            assert denied.reason == "unauthorized"
+            result = controller.confirm(
+                account, actor, session_id="session-a",
+                offer_handle=handle, decision="accept",
+            )
         if case.mode == "replay":
             result = controller.confirm(
                 account, actor, session_id="session-a",
