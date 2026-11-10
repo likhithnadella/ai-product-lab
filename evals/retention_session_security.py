@@ -80,16 +80,14 @@ def run_case(case: SessionCase) -> dict[str, object]:
             now[0] = 130.0
         elif case.mode == "invalid_decision":
             decision = "approve"
+        elif case.mode == "denial_does_not_consume":
+            target_actor = Actor("tenant-b", frozenset({"account-a"}))
         result = controller.confirm(
             target_account, target_actor, session_id=target_session,
             offer_handle=handle, decision=decision,
         )
         if case.mode == "denial_does_not_consume":
-            denied = controller.confirm(
-                account, Actor("tenant-b", frozenset({"account-a"})),
-                session_id="session-a", offer_handle=handle, decision="accept",
-            )
-            assert denied.reason == "unauthorized"
+            assert result.reason == "unauthorized"
             result = controller.confirm(
                 account, actor, session_id="session-a",
                 offer_handle=handle, decision="accept",
