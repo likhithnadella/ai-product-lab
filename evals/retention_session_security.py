@@ -42,22 +42,22 @@ def run_case(case: SessionCase) -> dict[str, object]:
         max_pending_offers_per_tenant=1,
         clock=lambda: now[0],
     )
-    account = Account("tenant-a", "account-a", Decimal("60"), Decimal("18"))
+    account = Account("tenant-a", "account-a", Decimal(60), Decimal(18))
     actor = Actor("tenant-a", frozenset({"account-a"}))
     proposal, handle = controller.propose(
-        account, actor, session_id="session-a", amount=Decimal("10")
+        account, actor, session_id="session-a", amount=Decimal(10)
     )
     assert proposal.outcome == "offer" and handle is not None
     if case.mode == "expired_releases_quota":
         now[0] = 130.0
         result, replacement = controller.propose(
-            account, actor, session_id="session-b", amount=Decimal("10")
+            account, actor, session_id="session-b", amount=Decimal(10)
         )
         observed_reason = result.reason
         assert replacement is not None and replacement != handle
     elif case.mode == "capacity":
         result, _ = controller.propose(
-            account, actor, session_id="session-b", amount=Decimal("10")
+            account, actor, session_id="session-b", amount=Decimal(10)
         )
         observed_reason = result.reason
     else:
@@ -73,7 +73,7 @@ def run_case(case: SessionCase) -> dict[str, object]:
             target_session = "session-b"
         elif case.mode == "wrong_account":
             target_account = Account(
-                "tenant-a", "account-b", Decimal("60"), Decimal("18")
+                "tenant-a", "account-b", Decimal(60), Decimal(18)
             )
             target_actor = Actor("tenant-a", frozenset({"account-a", "account-b"}))
         elif case.mode == "expired":
