@@ -127,7 +127,7 @@ class TenantRecordStore:
             return stored.model_copy(deep=True) if stored is not None else None
 
     def search(
-        self, principal: TenantPrincipal, query: str, *, limit: int = 10
+        self, principal: TenantPrincipal, query: str, *, limit: int = 10, offset: int = 0
     ) -> list[SearchHit]:
         if not isinstance(principal, TenantPrincipal):
             raise PermissionError("trusted tenant principal required")
@@ -138,5 +138,5 @@ class TenantRecordStore:
                 if tenant == principal.tenant_id and source in principal.readable_sources
             ]
         return search_records(
-            records, query, allowed_sources=principal.readable_sources, limit=limit
+            records, query, allowed_sources=principal.readable_sources, limit=limit, offset=offset
         )
