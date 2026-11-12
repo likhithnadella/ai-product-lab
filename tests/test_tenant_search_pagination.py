@@ -42,7 +42,9 @@ def test_tenant_search_pages_only_include_authorized_records() -> None:
 def test_invalid_offset_is_rejected(offset: object) -> None:
     store = TenantRecordStore()
     with pytest.raises(ValueError, match="offset"):
-        store.search(actor("synthetic-a", read=("crm",)), "Sample", offset=offset)  # type: ignore[arg-type]
+        store.search(  # type: ignore[arg-type]
+            actor("synthetic-a", read=("crm",)), "Sample", offset=offset
+        )
 
 
 def test_no_read_permission_yields_no_results_at_any_offset() -> None:
