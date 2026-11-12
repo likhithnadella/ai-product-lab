@@ -51,3 +51,40 @@ def test_no_read_permission_yields_no_results_at_any_offset() -> None:
     store.upsert(writer, IntakeRecord(source="crm", external_id="1", first_name="Sample"))
     assert store.search(writer, "Sample", offset=0) == []
     assert store.search(writer, "Sample", offset=5) == []
+
+
+def test_permission_revocation_between_pages_is_applied_immediately() -> None:
+    store = TenantRecordStore()
+    writer = actor("synthetic-a", read=("crm", "erp"))
+    store.upsert(
+        writer, IntakeRecord(source="crm", external_id="crm-1", first_name="Sample")
+    )
+    store.upsert(
+        writer, IntakeRecord(source="erp", external_id="erp-1", first_name="Sample")
+    )
+    first_page = store.search(writer, "Sample", limit=1, offset=0)
+    assert len(first_page) == 1
+
+    # The trusted identity adapter would construct a new principal after
+    # revocation. A stale principal cannot provide real-time revocation.
+    restricted = actor("synthetic-a", read=("crm",))
+    all_visible = store.search(restricted, "Sample", limit=10)
+    assert [hit.record.external_id for hit in all_visible] == ["crm-1"]
+    assert store.search(restricted, "Sample", limit=1, offset=1) == []
+
+
+def test_search_results_are_detached_from_stored_records_across_pages() -> None:
+    store = TenantRecordStore()
+    principal = actor("synthetic-a", read=("crm",))
+    store.upsert(
+        principal,
+        IntakeRecord(
+            source="crm", external_id="1", first_name="Sample",
+            attributes={"classification": "synthetic"},
+        ),
+    )
+    page = store.search(principal, "Sample", limit=1, offset=0)
+    page[0].record.attributes["classification"] = "modified"
+    assert store.search(principal, "Sample", limit=1)[0].record.attributes[
+        "classification"
+    ] == "synthetic"
