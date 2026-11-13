@@ -251,3 +251,18 @@ def test_batch_commit_exception_preserves_entire_previous_state() -> None:
     # A later classification exception must not leave an earlier item written.
     assert store.get(actor, "crm", "new") is None
     assert store.get(actor, "crm", "existing").first_name == "Original"
+
+
+@pytest.mark.parametrize("source", ["", " ", " crm", "crm ", "\\tcrm"])
+def test_principal_rejects_noncanonical_source_permissions(source: str) -> None:
+    with pytest.raises(ValueError, match="source permissions"):
+        principal("tenant-a", read=(source,))
+    with pytest.raises(ValueError, match="source permissions"):
+        principal("tenant-a", write=(source,))
+
+
+def test_principal_requires_immutable_permission_sets() -> None:
+    with pytest.raises(ValueError, match="source permissions"):
+        TenantPrincipal("tenant-a", {"crm"}, frozenset())  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="source permissions"):
+        TenantPrincipal("tenant-a", frozenset(), {"crm"})  # type: ignore[arg-type]
