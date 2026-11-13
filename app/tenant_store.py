@@ -31,7 +31,7 @@ class TenantPrincipal:
             raise ValueError("tenant_id must not contain surrounding whitespace")
         for sources in (self.readable_sources, self.writable_sources):
             if not isinstance(sources, frozenset) or any(
-                not isinstance(source, str) or not source.strip() for source in sources
+                not isinstance(source, str) or not source.strip() or source != source.strip()\n                for source in sources
             ):
                 raise ValueError("source permissions must be frozensets of nonblank strings")
 
@@ -87,10 +87,10 @@ class TenantRecordStore:
             snapshot = record.model_copy(deep=True)
             if not isinstance(snapshot, IntakeRecord) or snapshot is record:
                 raise TypeError("batch copy must be an independent IntakeRecord")
-            if not isinstance(snapshot.source, str) or not snapshot.source.strip():
+            if (\n                not isinstance(snapshot.source, str)\n                or not snapshot.source.strip()\n                or snapshot.source != snapshot.source.strip()\n            ):
                 raise ValueError("nonblank source and external_id are required")
             self._require(principal, snapshot.source, write=True)
-            if not isinstance(snapshot.external_id, str) or not snapshot.external_id.strip():
+            if (\n                not isinstance(snapshot.external_id, str)\n                or not snapshot.external_id.strip()\n                or snapshot.external_id != snapshot.external_id.strip()\n            ):
                 raise ValueError("nonblank source and external_id are required")
             prepared.append(snapshot)
 
