@@ -34,3 +34,18 @@ Status: **design only**. This repository has no authenticated ingestion or autho
 ## Implementation sequence
 
 Start with a trusted principal contract and negative API tests, then tenant-aware record keys and storage methods, then scoped retrieval, then audit/operational controls. Each increment needs passing CI and independent review. **Do not treat this design document as a completed security control.**
+
+## Canonical identifiers in the internal prototype
+
+The internal `TenantPrincipal` and `TenantRecordStore` now reject leading/trailing
+whitespace in tenant identifiers, source permissions, record sources and external
+IDs rather than silently normalizing ambiguous authorization or storage keys.
+A batch containing one malformed record is rejected before any records are
+committed. This deliberately preserves exact case and internal whitespace:
+changing those semantics requires an explicit, versioned identifier contract
+and migration plan. These checks do **not** authenticate a principal, prevent
+Unicode confusables, or provide durable, distributed isolation.
+
+Reproduce the negative checks with `pytest -q tests/test_tenant_store.py` and
+`ruff check app/tenant_store.py tests/test_tenant_store.py`. CI results must
+be verified independently before merging.

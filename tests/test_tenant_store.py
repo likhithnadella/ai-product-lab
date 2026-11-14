@@ -251,3 +251,37 @@ def test_batch_commit_exception_preserves_entire_previous_state() -> None:
     # A later classification exception must not leave an earlier item written.
     assert store.get(actor, "crm", "new") is None
     assert store.get(actor, "crm", "existing").first_name == "Original"
+
+
+@pytest.mark.parametrize("source", ["", " ", " crm", "crm ", "\\tcrm"])
+def test_principal_rejects_noncanonical_source_permissions(source: str) -> None:
+    with pytest.raises(ValueError, match="source permissions"):
+        principal("tenant-a", read=(source,))
+    with pytest.raises(ValueError, match="source permissions"):
+        principal("tenant-a", write=(source,))
+
+
+def test_principal_requires_immutable_permission_sets() -> None:
+    with pytest.raises(ValueError, match="source permissions"):
+        TenantPrincipal("tenant-a", {"crm"}, frozenset())  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="source permissions"):
+        TenantPrincipal("tenant-a", frozenset(), {"crm"})  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    ("source", "external_id"),
+    [(" crm", "id-1"), ("crm ", "id-1"), ("crm", " id-1"), ("crm", "id-1 ")],
+)
+def test_batch_rejects_noncanonical_record_keys_without_partial_write(
+    source: str, external_id: str
+) -> None:
+    store = TenantRecordStore()
+    actor = principal("tenant-a", read=("crm",), write=("crm",))
+    good = IntakeRecord(source="crm", external_id="good", first_name="Ada")
+    bad = IntakeRecord(source=source, external_id=external_id, first_name="Grace")
+
+    with pytest.raises((ValueError, PermissionError)):
+        store.upsert_many(actor, [good, bad])
+
+    assert store.get(actor, "crm", "good") is None
+    assert store.search(actor, "Ada") == []
